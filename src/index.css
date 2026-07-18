@@ -22,12 +22,23 @@
 
 /* Custom print layout styling for contract PDF */
 @media print {
-  /* Hide all elements on the page by default except the active modal preview wrapper */
-  #root > :not(.contract-preview-overlay) {
+  /* Reset general page and parent container parameters for pristine multi-page printing */
+  html, body, #root, #root > div, .flex-grow, main {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    position: static !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Hide all tab contents and siblings inside main except the print overlay itself */
+  main > :not(.contract-preview-overlay) {
     display: none !important;
   }
-  
-  /* Normalize the modal preview overlay during printing so it flows naturally */
+
+  /* Normalize the modal preview overlay during printing so it flows naturally in standard document flow */
   .contract-preview-overlay {
     position: static !important;
     display: block !important;
@@ -38,17 +49,6 @@
     padding: 0 !important;
     margin: 0 !important;
     z-index: auto !important;
-  }
-  
-  /* Reset general page parameters for pristine multi-page printing */
-  html, body, #root, main, div:not(.print-page) {
-    overflow: visible !important;
-    height: auto !important;
-    min-height: auto !important;
-    max-height: none !important;
-    position: static !important;
-    background: white !important;
-    color: black !important;
   }
 
   /* Explicitly hide control bars or utility panels marked with no-print */

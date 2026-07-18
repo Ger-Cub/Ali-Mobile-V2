@@ -46,7 +46,7 @@ import {
 } from './data/db';
 import { ContractDocument } from './components/ContractDocument';
 import { KnoxSimulator } from './components/KnoxSimulator';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
 export default function App() {
