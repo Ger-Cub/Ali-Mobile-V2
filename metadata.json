@@ -1,0 +1,6 @@
+{
+  "name": "Ali Mobile",
+  "description": "Application PWA de gestion de vente de smartphones à crédit et de financement, avec suivi des clients, contrats, paiements, retards, agents, simulateur de blocage Knox et génération automatique de contrat PDF.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

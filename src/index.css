@@ -1,0 +1,64 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Force border-radius to 0 for all elements to get flat sharp design */
+*, *::before, *::after {
+  border-radius: 0px !important;
+}
+
+@layer base {
+  body {
+    background-color: #f8fafc;
+    color: #0f172a;
+    font-family: var(--font-sans);
+  }
+}
+
+/* Custom print layout styling for contract PDF */
+@media print {
+  /* Hide all elements on the page by default */
+  body * {
+    visibility: hidden !important;
+  }
+  
+  /* Show only the contract document print-page container and its children */
+  .print-page, .print-page * {
+    visibility: visible !important;
+  }
+  
+  /* Position the contract document perfectly at the top-left of the printed page */
+  .print-page {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 1.5cm !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: white !important;
+    color: black !important;
+    display: block !important;
+  }
+  
+  /* Ensure parent containers don't clip the absolutely positioned print-page */
+  html, body, #root, main, div {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+  }
+
+  /* Explicitly hide control bars or utility panels marked with no-print */
+  .no-print, .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+}
+

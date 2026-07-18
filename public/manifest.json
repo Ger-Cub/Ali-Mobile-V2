@@ -1,0 +1,22 @@
+{
+  "short_name": "Ali Mobile",
+  "name": "Ali Mobile - Crédit & Financement",
+  "description": "Suivi des ventes à crédit et de financement de smartphones avec Knox Security",
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=192&h=192&fit=crop&q=80",
+      "type": "image/jpeg",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=512&h=512&fit=crop&q=80",
+      "type": "image/jpeg",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "display": "standalone",
+  "orientation": "portrait"
+}
