@@ -387,7 +387,22 @@ export default function App() {
         scale: 2, // 2x density for superb print readability
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        windowWidth: 800,
+        scrollX: 0,
+        scrollY: 0,
+        onclone: (clonedDoc) => {
+          const el = clonedDoc.getElementById(elementId);
+          if (el) {
+            el.style.width = '800px';
+            el.style.height = 'auto';
+            el.style.maxHeight = 'none';
+            el.style.overflow = 'visible';
+            el.style.padding = '40px';
+            el.style.boxShadow = 'none';
+            el.style.border = 'none';
+          }
+        }
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -413,8 +428,31 @@ export default function App() {
         heightLeft -= pageHeight;
       }
       
-      pdf.save(`Contrat_AliMobile_${viewingContractDoc.contractNumber}.pdf`);
-      showToast("Contrat PDF téléchargé avec succès !", "success");
+      // 1. Direct download trigger
+      try {
+        pdf.save(`Contrat_AliMobile_${viewingContractDoc.contractNumber}.pdf`);
+      } catch (saveErr) {
+        console.warn("Direct download save error:", saveErr);
+      }
+      
+      // 2. Blob fallback trigger (critical for iframe sandboxes which block automatic downloads)
+      const blob = pdf.output('blob');
+      const blobUrl = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `Contrat_AliMobile_${viewingContractDoc.contractNumber}.pdf`;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Open in a new window/tab so the user can easily print/save the high-res PDF directly
+      setTimeout(() => {
+        window.open(blobUrl, '_blank');
+      }, 400);
+
+      showToast("Contrat PDF généré et ouvert avec succès !", "success");
     } catch (err) {
       console.error("Erreur de génération PDF:", err);
       showToast("Impossible de générer le fichier PDF.", "error");
@@ -2132,7 +2170,7 @@ export default function App() {
                 if (!client || !phone) return null;
 
                 return (
-                  <div className="fixed inset-0 bg-black/95 overflow-y-auto z-50 flex flex-col p-4 md:p-8">
+                  <div className="fixed inset-0 bg-black/95 overflow-y-auto z-50 flex flex-col p-4 md:p-8 contract-preview-overlay">
                     {/* Control Bar - No Print */}
                     <div className="no-print max-w-[800px] mx-auto w-full flex flex-col md:flex-row justify-between items-center gap-3 mb-4 bg-neutral-900 p-4 rounded-xl border border-neutral-800">
                       <div className="flex items-center space-x-2">
@@ -2160,14 +2198,6 @@ export default function App() {
                         >
                           Fermer l'aperçu
                         </button>
-                      </div>
-                    </div>
-
-                    {/* Highly informative banner about iframe print restriction */}
-                    <div className="no-print max-w-[800px] mx-auto w-full mb-4 bg-amber-950/40 border border-amber-900/50 p-3.5 rounded-xl text-amber-200 text-xs flex items-start gap-2.5">
-                      <span className="text-base leading-none">💡</span>
-                      <div>
-                        <span className="font-bold">Note d'impression importante :</span> L'aperçu s'affiche actuellement dans un cadre de prévisualisation sécurisé (iframe). Si le bouton d'impression ne réagit pas, veuillez cliquer sur le bouton <span className="font-bold underline text-white">"Open in new tab"</span> ou <span className="font-bold text-white underline">"Ouvrir dans un nouvel onglet"</span> tout en haut à droite de l'écran pour que l'impression fonctionne directement !
                       </div>
                     </div>
 
