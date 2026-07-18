@@ -244,7 +244,10 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
             </div>
 
             <div className="border border-neutral-200 rounded p-4 flex flex-col justify-between h-[150px] relative bg-neutral-50 overflow-hidden">
-              <span className="font-bold text-neutral-900 border-b border-neutral-100 pb-1 text-center">Pour la société ALI MOBILE</span>
+              <div className="border-b border-neutral-100 pb-1 text-center">
+                <span className="font-bold text-neutral-900 block text-xs">Pour la société ALI MOBILE</span>
+                <span className="text-[9px] text-slate-500 font-bold block">Directeur : Franck Alliance</span>
+              </div>
               
               {/* Fake Ali Mobile stamp and agent signature */}
               <div className="absolute inset-0 flex justify-center items-center pointer-events-none">
@@ -260,7 +263,7 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
                 </div>
               </div>
 
-              <span className="text-[10px] text-neutral-400 text-center italic mt-auto">Signature et cachet de l'agent</span>
+              <span className="text-[10px] text-neutral-400 text-center italic mt-auto">Signature & cachet autorisés</span>
             </div>
           </div>
         </div>

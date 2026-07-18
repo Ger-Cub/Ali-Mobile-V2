@@ -79,7 +79,7 @@ export interface DelayRecord {
 
 // Default Seed Data
 export const SEED_AGENTS: Agent[] = [
-  { id: 'agent-1', name: 'Jean-Pierre Baraka', email: 'jp.baraka@alimobile.com', code: 'AG-243-01', phone: '+243 824 444 201' },
+  { id: 'agent-1', name: 'Franck Baraka', email: 'f.baraka@alimobile.com', code: 'AG-243-01', phone: '+243 824 444 201' },
   { id: 'agent-2', name: 'Marie Kavira', email: 'm.kavira@alimobile.com', code: 'AG-243-02', phone: '+243 824 444 202' },
   { id: 'agent-3', name: 'Grace Bahati', email: 'g.bahati@alimobile.com', code: 'AG-243-03', phone: '+243 824 444 203' }
 ];
@@ -526,6 +526,7 @@ export class AliMobileDB {
     localStorage.setItem(STORAGE_KEYS.PAIEMENTS, JSON.stringify(SEED_PAIEMENTS));
     localStorage.setItem(STORAGE_KEYS.RETARDS, JSON.stringify(SEED_RETARDS));
     localStorage.setItem(STORAGE_KEYS.SMARTPHONES, JSON.stringify(SEED_SMARTPHONES));
+    localStorage.setItem(STORAGE_KEYS.AGENTS, JSON.stringify(SEED_AGENTS));
     localStorage.setItem(STORAGE_KEYS.ACTIVE_AGENT, 'admin');
   }
 

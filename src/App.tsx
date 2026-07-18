@@ -46,6 +46,8 @@ import {
 } from './data/db';
 import { ContractDocument } from './components/ContractDocument';
 import { KnoxSimulator } from './components/KnoxSimulator';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 export default function App() {
   // Navigation State
@@ -368,6 +370,57 @@ export default function App() {
     window.print();
   };
 
+  // Direct, high-fidelity PDF Generation & Export bypassing print dialogs
+  const handleExportPDF = async () => {
+    if (!viewingContractDoc) return;
+    const elementId = `contract-doc-${viewingContractDoc.contractNumber}`;
+    const element = document.getElementById(elementId);
+    if (!element) {
+      showToast("Erreur : Document introuvable.", "error");
+      return;
+    }
+
+    try {
+      showToast("Génération du contrat PDF en cours...", "success");
+      
+      const canvas = await html2canvas(element, {
+        scale: 2, // 2x density for superb print readability
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      
+      // Standard A4 dimensions in mm
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210;
+      const pageHeight = 297;
+      
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+      
+      // Render first page
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      
+      // Render subsequent pages as sliced sections of the high resolution canvas
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      
+      pdf.save(`Contrat_AliMobile_${viewingContractDoc.contractNumber}.pdf`);
+      showToast("Contrat PDF téléchargé avec succès !", "success");
+    } catch (err) {
+      console.error("Erreur de génération PDF:", err);
+      showToast("Impossible de générer le fichier PDF.", "error");
+    }
+  };
+
   return (
     <div className="h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row font-sans relative selection:bg-orange-500/20 selection:text-orange-950 overflow-hidden">
       {/* Toast Notification */}
@@ -427,10 +480,10 @@ export default function App() {
           <ul className="space-y-2">
             {[
               { id: 'dashboard', label: 'Tableau de bord', icon: TrendingUp },
-              { id: 'contracts', label: 'Contrats & Clients', icon: Users },
-              { id: 'new_contract', label: 'Créer un Contrat', icon: PlusCircle },
-              { id: 'new_payment', label: 'Saisir un Paiement', icon: Coins },
-              { id: 'knox', label: 'Retards & Knox', icon: ShieldAlert, badge: filteredDelays.length > 0 ? filteredDelays.length : undefined },
+              { id: 'contracts', label: 'Voir ses clients', icon: Users },
+              { id: 'new_contract', label: 'Créer un contrat', icon: PlusCircle },
+              { id: 'new_payment', label: 'Ajouter un paiement', icon: Coins },
+              { id: 'knox', label: 'Voir ses retards', icon: ShieldAlert, badge: filteredDelays.length > 0 ? filteredDelays.length : undefined },
               { id: 'agents', label: 'Statistiques Agents', icon: Activity },
               { id: 'settings', label: 'Paramètres', icon: Settings },
             ].map((item) => {
@@ -534,7 +587,7 @@ export default function App() {
               }}
               className="hidden sm:inline-block bg-orange-500 text-white px-5 py-2 rounded-none font-semibold text-xs shadow-md shadow-orange-500/20 hover:bg-orange-600 transition"
             >
-              Recharger
+              Créer un contrat
             </button>
           </div>
         </header>
@@ -563,14 +616,14 @@ export default function App() {
                     className="bg-orange-500 text-white px-5 py-2.5 rounded-lg font-bold text-xs shadow-md shadow-orange-500/20 hover:bg-orange-600 transition flex items-center space-x-1.5 cursor-pointer"
                   >
                     <PlusCircle className="w-4 h-4" />
-                    <span>Recharger / Nouveau</span>
+                    <span>Créer un contrat</span>
                   </button>
                   <button 
                     onClick={() => setActiveTab('new_payment')}
                     className="bg-[#0F172A] text-white hover:bg-slate-800 text-xs font-bold py-2.5 px-4 rounded-lg transition flex items-center space-x-1.5 cursor-pointer shadow-sm"
                   >
                     <Coins className="w-4 h-4" />
-                    <span>Saisir un Paiement</span>
+                    <span>Ajouter un paiement</span>
                   </button>
                 </div>
               </div>
@@ -730,7 +783,7 @@ export default function App() {
                   <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center group-hover:bg-orange-500 transition-colors text-white">
                     <Coins className="w-6 h-6" />
                   </div>
-                  <span className="text-sm font-semibold">Saisir Paiement</span>
+                  <span className="text-sm font-semibold">Ajouter un paiement</span>
                 </div>
 
                 <div 
@@ -740,7 +793,7 @@ export default function App() {
                   <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center group-hover:bg-orange-500 group-hover:text-white transition-all text-orange-500">
                     <PlusCircle className="w-6 h-6" />
                   </div>
-                  <span className="text-sm font-semibold text-slate-700">Créer un Contrat</span>
+                  <span className="text-sm font-semibold text-slate-700">Créer un contrat</span>
                 </div>
 
                 <div 
@@ -750,7 +803,9 @@ export default function App() {
                   <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center group-hover:bg-orange-500 group-hover:text-white transition-all text-orange-500">
                     <Users className="w-6 h-6" />
                   </div>
-                  <span className="text-sm font-semibold text-slate-700">Contrats & Clients</span>
+                  <span className="text-sm font-semibold text-slate-700">
+                    Voir ses clients
+                  </span>
                 </div>
 
                 <div 
@@ -760,7 +815,9 @@ export default function App() {
                   <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center group-hover:bg-orange-500 group-hover:text-white transition-all text-orange-500">
                     <ShieldAlert className="w-6 h-6" />
                   </div>
-                  <span className="text-sm font-semibold text-slate-700">Support & Knox</span>
+                  <span className="text-sm font-semibold text-slate-700">
+                    Voir ses retards
+                  </span>
                 </div>
               </div>
 
@@ -1326,7 +1383,7 @@ export default function App() {
             <div className="no-print space-y-6 max-w-xl mx-auto w-full">
               <div className="border-b border-slate-200 pb-4">
                 <h1 className="text-2xl font-black text-slate-900 tracking-tight font-display uppercase italic">
-                  Saisir un Paiement de Traite
+                  Ajouter un paiement
                 </h1>
                 <p className="text-xs text-slate-500 mt-1">Enregistrer la réception d'un paiement Mobile Money ou espèces.</p>
               </div>
@@ -2082,13 +2139,20 @@ export default function App() {
                         <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping"></span>
                         <span className="text-xs text-neutral-300 font-semibold font-display">CONTRAT PRÊT À L'IMPRESSION (PDF)</span>
                       </div>
-                      <div className="flex space-x-2">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={handleExportPDF}
+                          className="bg-orange-500 hover:bg-orange-600 text-white py-1.5 px-4 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer shadow-md shadow-orange-500/20"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Télécharger le PDF direct</span>
+                        </button>
                         <button
                           onClick={handlePrintContract}
                           className="bg-white text-black hover:bg-neutral-200 py-1.5 px-4 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer"
                         >
                           <Printer className="w-3.5 h-3.5" />
-                          <span>Imprimer / Exporter en PDF</span>
+                          <span>Imprimer (Navigateur)</span>
                         </button>
                         <button
                           onClick={() => setViewingContractDoc(null)}
