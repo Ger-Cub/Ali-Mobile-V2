@@ -1,22 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  TrendingUp, 
-  Users, 
-  Smartphone as PhoneIcon, 
-  FileText, 
-  Coins, 
-  ShieldAlert, 
-  Activity, 
-  PlusCircle, 
-  BadgeAlert, 
-  History, 
-  UserCheck, 
-  Settings, 
-  Printer, 
-  Search, 
-  X, 
-  ChevronRight, 
-  ArrowUpRight, 
+import {
+  TrendingUp,
+  Users,
+  Smartphone as PhoneIcon,
+  FileText,
+  Coins,
+  ShieldAlert,
+  Activity,
+  PlusCircle,
+  BadgeAlert,
+  History,
+  UserCheck,
+  Settings,
+  Printer,
+  Search,
+  X,
+  ChevronRight,
+  ArrowUpRight,
   UserX,
   CreditCard,
   CheckCircle,
@@ -38,13 +38,13 @@ import {
   Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Client, 
-  Contract, 
-  Smartphone, 
-  Payment, 
-  DelayRecord, 
-  Agent, 
+import {
+  Client,
+  Contract,
+  Smartphone,
+  Payment,
+  DelayRecord,
+  Agent,
   USD_TO_CDF,
   PaymentPlanType
 } from './data/db';
@@ -60,7 +60,7 @@ export default function App() {
   // Navigation State
   const [activeTab, setActiveTab] = useState<'dashboard' | 'contracts' | 'new_contract' | 'new_payment' | 'knox' | 'agents' | 'settings' | 'profile' | 'knox_stock'>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  
+
   // Session and Auth State
   const [session, setSession] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<Agent | null>(null);
@@ -158,7 +158,7 @@ export default function App() {
   const fetchCurrentUser = async (userId: string) => {
     try {
       const { data, error } = await supabase.from('agents').select('*').eq('id', userId).single();
-      
+
       if (error || !data) {
         // Fallback: build profile from JWT token metadata
         console.warn('Could not fetch agent from DB, using JWT metadata:', error?.message);
@@ -183,10 +183,10 @@ export default function App() {
         }
         throw error || new Error('Profil introuvable');
       }
-      
+
       const mapped = mapAgent(data);
       setCurrentUser(mapped);
-      
+
       // Default views
       if (mapped.role === 'admin') {
         setActiveAgentId('admin');
@@ -334,7 +334,7 @@ export default function App() {
       });
 
       showToast(`Appareil ${newDevice.brand} ${newDevice.model} enregistré avec succès !`);
-      
+
       setNewPhoneModel('');
       setNewPhoneValue('');
       setNewPhoneImei('');
@@ -390,7 +390,7 @@ export default function App() {
       const remaining = phone.valueUsd - defaultDeposit;
       const instAmount = Number((remaining / installments).toFixed(2));
       const day = contractForm.planType === 'hebdo' ? 'Samedi' : '05';
-      
+
       setContractForm(prev => ({
         ...prev,
         smartphoneId: phoneId,
@@ -413,7 +413,7 @@ export default function App() {
 
   const handleImeiChange = (val: string) => {
     const matchedPhone = smartphones.find(p => p.imei === val);
-    
+
     if (matchedPhone) {
       if (matchedPhone.id !== contractForm.smartphoneId) {
         const defaultDeposit = Math.round(matchedPhone.valueUsd * 0.5);
@@ -421,7 +421,7 @@ export default function App() {
         const remaining = matchedPhone.valueUsd - defaultDeposit;
         const instAmount = Number((remaining / installments).toFixed(2));
         const day = contractForm.planType === 'hebdo' ? 'Samedi' : '05';
-        
+
         setContractForm(prev => ({
           ...prev,
           smartphoneId: matchedPhone.id,
@@ -447,7 +447,7 @@ export default function App() {
           const remaining = partialMatch.valueUsd - defaultDeposit;
           const instAmount = Number((remaining / installments).toFixed(2));
           const day = contractForm.planType === 'hebdo' ? 'Samedi' : '05';
-          
+
           setContractForm(prev => ({
             ...prev,
             smartphoneId: partialMatch.id,
@@ -475,11 +475,11 @@ export default function App() {
     const phone = smartphones.find(p => p.id === contractForm.smartphoneId);
     const installments = type === 'hebdo' ? 8 : 2;
     const day = type === 'hebdo' ? 'Samedi' : '05';
-    
+
     if (phone) {
       const remaining = phone.valueUsd - contractForm.initialDepositUsd;
       const instAmount = Number((remaining / installments).toFixed(2));
-      
+
       setContractForm(prev => ({
         ...prev,
         planType: type,
@@ -500,11 +500,11 @@ export default function App() {
   const handleInitialDepositChange = (amount: number) => {
     const phone = smartphones.find(p => p.id === contractForm.smartphoneId);
     const installments = contractForm.totalInstallments || (contractForm.planType === 'hebdo' ? 8 : 2);
-    
+
     if (phone) {
       const remaining = phone.valueUsd - amount;
       const instAmount = Number((remaining / installments).toFixed(2));
-      
+
       setContractForm(prev => ({
         ...prev,
         initialDepositUsd: amount,
@@ -523,7 +523,7 @@ export default function App() {
     if (phone) {
       const remaining = phone.valueUsd - contractForm.initialDepositUsd;
       const instAmount = Number((remaining / (installments || 1)).toFixed(2));
-      
+
       setContractForm(prev => ({
         ...prev,
         totalInstallments: installments,
@@ -568,10 +568,10 @@ export default function App() {
       );
 
       showToast(`Contrat ${result.contract.contractNumber} créé et enregistré !`);
-      
+
       // Auto display contract for printing/saving
       setViewingContractDoc(result.contract);
-      
+
       // Reset Form State
       setClientForm({
         lastName: '',
@@ -627,7 +627,7 @@ export default function App() {
       );
 
       showToast(`Paiement de ${amt.toFixed(2)} $ validé avec succès pour le contrat ${paymentForm.contractNumber}`);
-      
+
       // Reset payment form
       setPaymentForm({
         contractNumber: '',
@@ -714,7 +714,7 @@ export default function App() {
 
     try {
       showToast("Génération du contrat PDF en cours...", "success");
-      
+
       const canvas = await html2canvas(element, {
         scale: 2, // 2x density for superb print readability
         useCORS: true,
@@ -738,20 +738,20 @@ export default function App() {
       });
 
       const imgData = canvas.toDataURL('image/png');
-      
+
       // Standard A4 dimensions in mm
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgWidth = 210;
       const pageHeight = 297;
-      
+
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       let heightLeft = imgHeight;
       let position = 0;
-      
+
       // Render first page
       pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
-      
+
       // Render subsequent pages as sliced sections of the high resolution canvas
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
@@ -759,18 +759,18 @@ export default function App() {
         pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
       }
-      
+
       // 1. Direct download trigger
       try {
         pdf.save(`Contrat_AliMobile_${viewingContractDoc.contractNumber}.pdf`);
       } catch (saveErr) {
         console.warn("Direct download save error:", saveErr);
       }
-      
+
       // 2. Blob fallback trigger (critical for iframe sandboxes which block automatic downloads)
       const blob = pdf.output('blob');
       const blobUrl = URL.createObjectURL(blob);
-      
+
       const link = document.createElement('a');
       link.href = blobUrl;
       link.download = `Contrat_AliMobile_${viewingContractDoc.contractNumber}.pdf`;
@@ -778,7 +778,7 @@ export default function App() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       // Open in a new window/tab so the user can easily print/save the high-res PDF directly
       setTimeout(() => {
         window.open(blobUrl, '_blank');
@@ -809,7 +809,7 @@ export default function App() {
       {/* Toast Notification */}
       <AnimatePresence>
         {notification && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: -50 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -50 }}
@@ -828,7 +828,7 @@ export default function App() {
       {/* Backdrop for mobile sidebar drawer */}
       <AnimatePresence>
         {isMobileSidebarOpen && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.6 }}
             exit={{ opacity: 0 }}
@@ -841,21 +841,21 @@ export default function App() {
       {/* Left Navigation Sidebar - Sleek Interface (Desktop permanent, Mobile slide drawer) */}
       <aside className={`no-print bg-[#0F172A] text-slate-300 flex flex-col justify-between shrink-0 border-r border-slate-800 h-screen overflow-y-auto rounded-none z-50 transition-transform duration-300
         fixed inset-y-0 left-0 w-64 md:static md:translate-x-0 ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        
+
         <div className="p-6 flex items-center justify-between border-b border-slate-800/50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-orange-500 rounded-none flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-orange-500/20">A</div>
             <span className="text-white font-bold text-xl tracking-tight">Ali Mobile</span>
           </div>
           {/* Close button on mobile */}
-          <button 
+          <button
             onClick={() => setIsMobileSidebarOpen(false)}
             className="md:hidden text-slate-400 hover:text-white p-1 hover:bg-slate-800 rounded-none transition"
           >
             <X className="w-6 h-6" />
           </button>
         </div>
-        
+
         <div className="flex-grow p-4 space-y-6">
           <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold px-3 block">
             MENU DE SUIVI
@@ -882,11 +882,10 @@ export default function App() {
                       setSelectedContract(null);
                       setIsMobileSidebarOpen(false); // Auto close mobile sidebar
                     }}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-none text-sm transition-all duration-200 border ${
-                      isActive 
-                        ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 font-bold' 
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-none text-sm transition-all duration-200 border ${isActive
+                        ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 font-bold'
                         : 'text-slate-300 hover:bg-slate-800 border-transparent hover:text-white'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center space-x-3">
                       <Icon className={`w-5 h-5 ${isActive ? 'text-orange-400' : 'text-slate-400'}`} />
@@ -905,7 +904,7 @@ export default function App() {
         </div>
 
         {/* Quick Stats sidebar footer with active agent info matching mockup */}
-        <div 
+        <div
           onClick={() => {
             setActiveTab('profile');
             setSelectedClientForDetails(null);
@@ -937,7 +936,7 @@ export default function App() {
         {/* Top Header - Sleek Style matching Design HTML */}
         <header className="no-print h-20 bg-white border-b border-slate-200 shrink-0 flex items-center justify-between px-4 md:px-8 z-40 shadow-sm rounded-none">
           {/* Logo visible on mobile - Clickable to open sidebar drawer with active agent info */}
-          <div 
+          <div
             onClick={() => setIsMobileSidebarOpen(true)}
             className="flex md:hidden items-center gap-3 cursor-pointer group hover:opacity-80 transition select-none"
           >
@@ -953,7 +952,7 @@ export default function App() {
             {currentUser?.role === 'admin' ? (
               <div className="flex items-center bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-none text-xs">
                 <Briefcase className="w-3.5 h-3.5 text-slate-500 mr-2 shrink-0" />
-                <select 
+                {/**<select 
                   value={activeAgentId} 
                   onChange={(e) => handleAgentChange(e.target.value)}
                   className="bg-transparent text-slate-800 font-semibold focus:outline-none cursor-pointer text-xs"
@@ -964,7 +963,7 @@ export default function App() {
                       👤 {a.name} ({a.code})
                     </option>
                   ))}
-                </select>
+                </select>*/}
               </div>
             ) : (
               <div className="flex items-center bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-none text-xs font-semibold text-slate-800">
@@ -984,7 +983,7 @@ export default function App() {
             >
               <LogOut className="w-4.5 h-4.5" />
             </button>
-            <button 
+            <button
               onClick={() => {
                 setActiveTab('new_contract');
                 setSelectedClientForDetails(null);
@@ -999,7 +998,7 @@ export default function App() {
 
         {/* Content Panel */}
         <main className="flex-grow flex flex-col overflow-y-auto bg-slate-50 p-4 md:p-8 rounded-none">
-          
+
           {/* Dashboard Tab */}
           {activeTab === 'dashboard' && (
             <div className="no-print space-y-8 max-w-7xl mx-auto w-full">
@@ -1010,20 +1009,20 @@ export default function App() {
                     Aperçu du compte
                   </h1>
                   <p className="text-slate-500 text-xs mt-1 font-medium">
-                    {activeAgentId === 'admin' 
-                      ? "Tableau de bord • Statistiques globales consolidées." 
+                    {activeAgentId === 'admin'
+                      ? "Tableau de bord • Statistiques globales consolidées."
                       : `Tableau de bord • Agent agréé : ${agents.find(a => a.id === activeAgentId)?.name}`}
                   </p>
                 </div>
                 <div className="mt-3 md:mt-0 flex gap-2">
-                  <button 
+                  <button
                     onClick={() => setActiveTab('new_contract')}
                     className="bg-orange-500 text-white px-5 py-2.5 rounded-lg font-bold text-xs shadow-md shadow-orange-500/20 hover:bg-orange-600 transition flex items-center space-x-1.5 cursor-pointer"
                   >
                     <PlusCircle className="w-4 h-4" />
                     <span>Créer un contrat</span>
                   </button>
-                  <button 
+                  <button
                     onClick={() => setActiveTab('new_payment')}
                     className="bg-[#0F172A] text-white hover:bg-slate-800 text-xs font-bold py-2.5 px-4 rounded-lg transition flex items-center space-x-1.5 cursor-pointer shadow-sm"
                   >
@@ -1038,10 +1037,12 @@ export default function App() {
                 {[
                   { label: "Solde Encaissé", val: `${totalEncaisse.toLocaleString('fr-FR')}`, unit: "USD", desc: `${(totalEncaisse * USD_TO_CDF).toLocaleString('fr-FR')} CDF`, color: "text-emerald-600 bg-emerald-50/50 border-emerald-100", icon: Coins, detail: "Montant perçu à ce jour" },
                   { label: "Solde Restant", val: `${totalRestant.toLocaleString('fr-FR')}`, unit: "USD", desc: `${(totalRestant * USD_TO_CDF).toLocaleString('fr-FR')} CDF`, color: "text-orange-600 bg-orange-50/50 border-orange-100", icon: TrendingUp, detail: "Portefeuille à recouvrer" },
-                  { label: "Acheteurs OK", val: `${clients.filter(c => {
-                    const cont = contracts.find(co => co.clientId === c.id);
-                    return cont && cont.status === 'en_cours';
-                  }).length}`, unit: "Clients", desc: "En ordre de paiement", color: "text-slate-700 bg-slate-100/50 border-slate-200", icon: UserCheck, detail: "Contrats en règle" },
+                  {
+                    label: "Acheteurs OK", val: `${clients.filter(c => {
+                      const cont = contracts.find(co => co.clientId === c.id);
+                      return cont && cont.status === 'en_cours';
+                    }).length}`, unit: "Clients", desc: "En ordre de paiement", color: "text-slate-700 bg-slate-100/50 border-slate-200", icon: UserCheck, detail: "Contrats en règle"
+                  },
                   { label: "Retards & Bloqués", val: `${blockedContractsCount + delayedContractsCount}`, unit: "Alerte", desc: "Suspension Knox active", color: "text-red-600 bg-red-50/50 border-red-100", icon: BadgeAlert, detail: "Action requise" },
                   { label: "Finis / Acquis", val: `${completedContractsCount}`, unit: "Clôturés", desc: "Propriétaires à 100%", color: "text-indigo-600 bg-indigo-50/50 border-indigo-100", icon: CheckCircle, detail: "Contrats acquittés" },
                 ].map((stat, i) => {
@@ -1049,7 +1050,7 @@ export default function App() {
                   return (
                     <div key={i} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden flex flex-col justify-between min-h-[140px] hover:shadow-md transition duration-200">
                       <div className="absolute top-0 right-0 p-3 opacity-5 text-slate-900">
-                         <Icon className="w-16 h-16" />
+                        <Icon className="w-16 h-16" />
                       </div>
                       <div>
                         <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">{stat.label}</p>
@@ -1068,7 +1069,7 @@ export default function App() {
 
               {/* Second Row: Graphs & Agents Standings styled after Sleek Interface */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
+
                 {/* SVG Graph 1: Recovery Status Portfolio split */}
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-4">
                   <div className="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -1077,7 +1078,7 @@ export default function App() {
                     </h3>
                     <span className="text-[10px] font-mono font-bold text-slate-400">Recouvrement %</span>
                   </div>
-                  
+
                   {/* Custom horizontal stacked bar */}
                   {(() => {
                     const totalCount = contracts.length || 1;
@@ -1146,7 +1147,7 @@ export default function App() {
                     {agents.map((agent) => {
                       const agentContracts = contracts.filter(c => c.agentId === agent.id);
                       const agentPayments = payments.filter(p => p.agentId === agent.id && p.status === 'Terminé');
-                      
+
                       const agentSalesVolume = agentContracts.reduce((acc, curr) => {
                         const phone = smartphones.find(p => p.id === curr.smartphoneId);
                         return acc + (phone ? phone.valueUsd : 0);
@@ -1166,8 +1167,8 @@ export default function App() {
                             </div>
                           </div>
                           <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-gradient-to-r from-orange-500 to-amber-500 transition-all duration-1000 shadow-[0_0_8px_rgba(249,115,22,0.3)]" 
+                            <div
+                              className="h-full bg-gradient-to-r from-orange-500 to-amber-500 transition-all duration-1000 shadow-[0_0_8px_rgba(249,115,22,0.3)]"
                               style={{ width: `${collectedPct}%` }}
                             ></div>
                           </div>
@@ -1181,7 +1182,7 @@ export default function App() {
 
               {/* Quick Actions Grid matching the Sleek design HTML */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div 
+                <div
                   onClick={() => setActiveTab('new_payment')}
                   className="bg-[#0F172A] text-white p-6 rounded-2xl flex flex-col items-center justify-center text-center gap-3 cursor-pointer hover:bg-slate-800 transition-all group shadow-md"
                 >
@@ -1191,7 +1192,7 @@ export default function App() {
                   <span className="text-sm font-semibold">Ajouter un paiement</span>
                 </div>
 
-                <div 
+                <div
                   onClick={() => setActiveTab('new_contract')}
                   className="bg-white p-6 rounded-2xl flex flex-col items-center justify-center text-center gap-3 border border-slate-100 shadow-sm cursor-pointer hover:border-orange-200 transition-all group"
                 >
@@ -1201,7 +1202,7 @@ export default function App() {
                   <span className="text-sm font-semibold text-slate-700">Créer un contrat</span>
                 </div>
 
-                <div 
+                <div
                   onClick={() => setActiveTab('contracts')}
                   className="bg-white p-6 rounded-2xl flex flex-col items-center justify-center text-center gap-3 border border-slate-100 shadow-sm cursor-pointer hover:border-orange-200 transition-all group"
                 >
@@ -1213,7 +1214,7 @@ export default function App() {
                   </span>
                 </div>
 
-                <div 
+                <div
                   onClick={() => setActiveTab('knox')}
                   className="bg-white p-6 rounded-2xl flex flex-col items-center justify-center text-center gap-3 border border-slate-100 shadow-sm cursor-pointer hover:border-orange-200 transition-all group"
                 >
@@ -1234,7 +1235,7 @@ export default function App() {
                     <p className="mt-2 text-orange-50 max-w-xl text-sm font-medium">Doublez votre volume Internet et recevez des minutes de communication gratuites pour chaque souscription de smartphone effectuée ce mois-ci. Offre réservée à nos clients à Goma.</p>
                   </div>
                   <div>
-                    <button 
+                    <button
                       onClick={() => setActiveTab('new_contract')}
                       className="bg-white text-orange-600 px-6 py-2.5 rounded-full font-extrabold text-xs shadow-lg active:scale-95 transition-transform cursor-pointer"
                     >
@@ -1257,9 +1258,9 @@ export default function App() {
                     <p className="text-xs text-slate-400 mt-0.5">Dernières transactions par Mobile Money et espèces à Goma.</p>
                   </div>
                   <div className="mt-2 sm:mt-0 flex space-x-2">
-                    <input 
-                      type="text" 
-                      placeholder="Rechercher par n° de facture..." 
+                    <input
+                      type="text"
+                      placeholder="Rechercher par n° de facture..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="bg-slate-50 text-xs px-3 py-2 rounded-xl border border-slate-200 text-slate-700 font-mono placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:bg-white w-64"
@@ -1285,7 +1286,7 @@ export default function App() {
                       {filteredPayments.slice(0, 8).map((pay) => {
                         const client = clients.find(c => c.id === pay.clientId);
                         const isSuccess = pay.status === 'Terminé';
-                        
+
                         return (
                           <tr key={pay.id} className="hover:bg-slate-50/50 transition">
                             <td className="py-3 text-slate-500">
@@ -1300,11 +1301,10 @@ export default function App() {
                             <td className="py-3 font-bold text-right text-slate-900">{pay.amountUsd.toFixed(2)} $</td>
                             <td className="py-3 font-mono text-right text-slate-500">{(pay.amountUsd * USD_TO_CDF).toLocaleString()} CDF</td>
                             <td className="py-3 text-center">
-                              <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                                isSuccess 
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
+                              <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${isSuccess
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                                   : 'bg-red-50 text-red-700 border border-red-100'
-                              }`}>
+                                }`}>
                                 {pay.status}
                               </span>
                             </td>
@@ -1331,9 +1331,9 @@ export default function App() {
                 <div className="mt-2 sm:mt-0 flex space-x-2">
                   <div className="relative">
                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-                    <input 
-                      type="text" 
-                      placeholder="Chercher client, contrat..." 
+                    <input
+                      type="text"
+                      placeholder="Chercher client, contrat..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="bg-white text-xs pl-8 pr-3 py-2 rounded-xl border border-slate-200 text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 w-64 shadow-sm"
@@ -1363,13 +1363,13 @@ export default function App() {
                       {filteredContracts.map((contract) => {
                         const client = clients.find(c => c.id === contract.clientId);
                         const phone = smartphones.find(p => p.id === contract.smartphoneId);
-                        
+
                         return (
                           <tr key={contract.id} className="hover:bg-slate-50/50 transition">
                             <td className="p-3 font-mono text-slate-800 font-bold">{contract.contractNumber}</td>
                             <td className="p-3">
                               {client ? (
-                                <button 
+                                <button
                                   onClick={() => setSelectedClientForDetails(client)}
                                   className="font-bold text-slate-800 hover:text-orange-500 hover:underline text-left block"
                                 >
@@ -1396,22 +1396,21 @@ export default function App() {
                               {contract.initialDepositUsd} $
                             </td>
                             <td className="p-3 text-center">
-                              <span className={`inline-block px-2.5 py-1 rounded-full text-[9px] font-bold ${
-                                contract.status === 'termine' 
+                              <span className={`inline-block px-2.5 py-1 rounded-full text-[9px] font-bold ${contract.status === 'termine'
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                                   : contract.status === 'bloque'
-                                  ? 'bg-red-50 text-red-700 border border-red-100 animate-pulse'
-                                  : contract.status === 'en_retard'
-                                  ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                                  : 'bg-orange-50 text-orange-700 border border-orange-100'
-                              }`}>
-                                {contract.status === 'termine' ? 'Smartphone Acquitté' : 
-                                 contract.status === 'bloque' ? '🔒 Knox Suspendu' : 
-                                 contract.status === 'en_retard' ? 'Retard de paiement' : 'En cours OK'}
+                                    ? 'bg-red-50 text-red-700 border border-red-100 animate-pulse'
+                                    : contract.status === 'en_retard'
+                                      ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                                      : 'bg-orange-50 text-orange-700 border border-orange-100'
+                                }`}>
+                                {contract.status === 'termine' ? 'Smartphone Acquitté' :
+                                  contract.status === 'bloque' ? '🔒 Knox Suspendu' :
+                                    contract.status === 'en_retard' ? 'Retard de paiement' : 'En cours OK'}
                               </span>
                             </td>
                             <td className="p-3 text-right space-x-1.5 whitespace-nowrap">
-                              <button 
+                              <button
                                 onClick={() => setViewingContractDoc(contract)}
                                 className="bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 p-2 rounded-xl transition inline-flex items-center"
                                 title="Voir le contrat imprimable"
@@ -1419,7 +1418,7 @@ export default function App() {
                                 <Printer className="w-3.5 h-3.5" />
                               </button>
                               {contract.status === 'bloque' && (
-                                <button 
+                                <button
                                   onClick={() => setKnoxSimulatingContract(contract)}
                                   className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 p-2 rounded-xl transition inline-flex items-center"
                                   title="Ouvrir le simulateur de blocage"
@@ -1475,7 +1474,7 @@ export default function App() {
               </div>
 
               <form onSubmit={handleCreateContract} className="bg-white border border-slate-100 shadow-sm rounded-3xl p-6 md:p-8 space-y-6">
-                
+
                 {formStep === 1 && (
                   <div className="space-y-4 animate-fadeIn">
                     <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider font-display border-b border-slate-100 pb-2">
@@ -1485,10 +1484,10 @@ export default function App() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
                         <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Nom (Obligatoire)</label>
-                        <input 
-                          type="text" 
-                          required 
-                          placeholder="Ex: Kakule" 
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ex: Kakule"
                           value={clientForm.lastName}
                           onChange={(e) => setClientForm(prev => ({ ...prev, lastName: e.target.value }))}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 placeholder:text-slate-400 font-medium transition"
@@ -1496,9 +1495,9 @@ export default function App() {
                       </div>
                       <div>
                         <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Postnom</label>
-                        <input 
-                          type="text" 
-                          placeholder="Ex: Kasaki" 
+                        <input
+                          type="text"
+                          placeholder="Ex: Kasaki"
                           value={clientForm.middleName}
                           onChange={(e) => setClientForm(prev => ({ ...prev, middleName: e.target.value }))}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 placeholder:text-slate-400 font-medium transition"
@@ -1506,10 +1505,10 @@ export default function App() {
                       </div>
                       <div>
                         <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Prénom (Obligatoire)</label>
-                        <input 
-                          type="text" 
-                          required 
-                          placeholder="Ex: Samuel" 
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ex: Samuel"
                           value={clientForm.firstName}
                           onChange={(e) => setClientForm(prev => ({ ...prev, firstName: e.target.value }))}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 placeholder:text-slate-400 font-medium transition"
@@ -1520,10 +1519,10 @@ export default function App() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Téléphone principal (WhatsApp)</label>
-                        <input 
-                          type="text" 
-                          required 
-                          placeholder="+243 997 123 456" 
+                        <input
+                          type="text"
+                          required
+                          placeholder="+243 997 123 456"
                           value={clientForm.phoneWhatsApp}
                           onChange={(e) => setClientForm(prev => ({ ...prev, phoneWhatsApp: e.target.value }))}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 placeholder:text-slate-400 font-mono transition"
@@ -1531,10 +1530,10 @@ export default function App() {
                       </div>
                       <div>
                         <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Téléphone d'urgence</label>
-                        <input 
-                          type="text" 
-                          required 
-                          placeholder="+243 ..." 
+                        <input
+                          type="text"
+                          required
+                          placeholder="+243 ..."
                           value={clientForm.phoneUrgency}
                           onChange={(e) => setClientForm(prev => ({ ...prev, phoneUrgency: e.target.value }))}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 placeholder:text-slate-400 font-mono transition"
@@ -1547,10 +1546,10 @@ export default function App() {
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div>
                           <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">N°</label>
-                          <input 
-                            type="text" 
-                            required 
-                            placeholder="17" 
+                          <input
+                            type="text"
+                            required
+                            placeholder="17"
                             value={clientForm.addressNum}
                             onChange={(e) => setClientForm(prev => ({ ...prev, addressNum: e.target.value }))}
                             className="w-full bg-white border border-slate-200 rounded-lg text-sm p-2 focus:outline-none focus:border-orange-500 transition"
@@ -1558,10 +1557,10 @@ export default function App() {
                         </div>
                         <div className="col-span-1 md:col-span-2">
                           <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Avenue</label>
-                          <input 
-                            type="text" 
-                            required 
-                            placeholder="des Écoles" 
+                          <input
+                            type="text"
+                            required
+                            placeholder="des Écoles"
                             value={clientForm.addressAvenue}
                             onChange={(e) => setClientForm(prev => ({ ...prev, addressAvenue: e.target.value }))}
                             className="w-full bg-white border border-slate-200 rounded-lg text-sm p-2 focus:outline-none focus:border-orange-500 transition"
@@ -1569,10 +1568,10 @@ export default function App() {
                         </div>
                         <div>
                           <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Quartier</label>
-                          <input 
-                            type="text" 
-                            required 
-                            placeholder="Himbi, Les Volcans..." 
+                          <input
+                            type="text"
+                            required
+                            placeholder="Himbi, Les Volcans..."
                             value={clientForm.neighborhood}
                             onChange={(e) => setClientForm(prev => ({ ...prev, neighborhood: e.target.value }))}
                             className="w-full bg-white border border-slate-200 rounded-lg text-sm p-2 focus:outline-none focus:border-orange-500 transition"
@@ -1581,10 +1580,10 @@ export default function App() {
                       </div>
                       <div>
                         <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Commune / Ville (Obligatoire)</label>
-                        <input 
-                          type="text" 
-                          required 
-                          placeholder="Goma, Bukavu, etc." 
+                        <input
+                          type="text"
+                          required
+                          placeholder="Goma, Bukavu, etc."
                           value={clientForm.cityCommune}
                           onChange={(e) => setClientForm(prev => ({ ...prev, cityCommune: e.target.value }))}
                           className="w-full bg-white border border-slate-200 rounded-lg text-sm p-2 focus:outline-none focus:border-orange-500 transition"
@@ -1595,7 +1594,7 @@ export default function App() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-100 pt-3">
                       <div>
                         <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Pièce d'identité fournie</label>
-                        <select 
+                        <select
                           value={clientForm.identityDocType}
                           onChange={(e) => setClientForm(prev => ({ ...prev, identityDocType: e.target.value as any }))}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-3 focus:outline-none focus:border-orange-500 focus:bg-white cursor-pointer text-slate-800 font-semibold"
@@ -1607,10 +1606,10 @@ export default function App() {
                       </div>
                       <div>
                         <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Numéro de la pièce (Obligatoire)</label>
-                        <input 
-                          type="text" 
-                          required 
-                          placeholder="ELEC-243-XXXX" 
+                        <input
+                          type="text"
+                          required
+                          placeholder="ELEC-243-XXXX"
                           value={clientForm.identityDocNum}
                           onChange={(e) => setClientForm(prev => ({ ...prev, identityDocNum: e.target.value }))}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 placeholder:text-slate-400 font-mono transition"
@@ -1623,9 +1622,9 @@ export default function App() {
                       <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1.5">
                         Photo de la pièce d'identité (Requis pour validation)
                       </label>
-                      
+
                       {!clientForm.identityCardPhoto ? (
-                        <div 
+                        <div
                           onDragOver={(e) => {
                             e.preventDefault();
                             setIsDraggingPhoto(true);
@@ -1641,14 +1640,13 @@ export default function App() {
                               handlePhotoUpload(e.dataTransfer.files[0]);
                             }
                           }}
-                          className={`border-2 border-dashed rounded-2xl p-6 text-center transition flex flex-col items-center justify-center cursor-pointer ${
-                            isDraggingPhoto 
-                              ? 'border-orange-500 bg-orange-50/50' 
+                          className={`border-2 border-dashed rounded-2xl p-6 text-center transition flex flex-col items-center justify-center cursor-pointer ${isDraggingPhoto
+                              ? 'border-orange-500 bg-orange-50/50'
                               : 'border-slate-200 bg-slate-50 hover:bg-slate-100/50'
-                          }`}
+                            }`}
                           onClick={() => document.getElementById('identity-photo-file-input')?.click()}
                         >
-                          <input 
+                          <input
                             type="file"
                             id="identity-photo-file-input"
                             accept="image/*"
@@ -1671,9 +1669,9 @@ export default function App() {
                         <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                           <div className="flex items-center space-x-3.5 w-full sm:w-auto">
                             <div className="w-16 h-12 bg-white rounded-lg border border-slate-100 overflow-hidden flex items-center justify-center shrink-0">
-                              <img 
-                                src={clientForm.identityCardPhoto} 
-                                alt="Aperçu pièce" 
+                              <img
+                                src={clientForm.identityCardPhoto}
+                                alt="Aperçu pièce"
                                 className="w-full h-full object-cover"
                               />
                             </div>
@@ -1699,8 +1697,8 @@ export default function App() {
                     </div>
 
                     <div className="pt-4 flex justify-end">
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => setFormStep(2)}
                         disabled={!clientForm.lastName || !clientForm.firstName || !clientForm.phoneWhatsApp || !clientForm.identityDocNum || !clientForm.identityCardPhoto}
                         className="bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-40 font-bold py-3 px-8 rounded-xl transition shadow-md shadow-orange-500/20 active:scale-98 cursor-pointer"
@@ -1720,7 +1718,7 @@ export default function App() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Sélectionner un Smartphone</label>
-                        <select 
+                        <select
                           required
                           value={contractForm.smartphoneId}
                           onChange={(e) => handleSmartphoneSelect(e.target.value)}
@@ -1737,11 +1735,11 @@ export default function App() {
 
                       <div>
                         <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Saisir / Scanner IMEI (Recherche Auto)</label>
-                        <input 
-                          type="text" 
-                          required 
+                        <input
+                          type="text"
+                          required
                           maxLength={15}
-                          placeholder="Saisir l'IMEI à 15 chiffres..." 
+                          placeholder="Saisir l'IMEI à 15 chiffres..."
                           value={contractForm.imeiInput}
                           onChange={(e) => handleImeiChange(e.target.value)}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-3 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 font-mono text-center font-bold transition"
@@ -1763,9 +1761,9 @@ export default function App() {
                         <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Choix de la Formule</label>
                         <div className="flex items-center space-x-4 mt-2">
                           <label className="flex items-center space-x-2 text-sm text-slate-700 cursor-pointer font-semibold">
-                            <input 
-                              type="radio" 
-                              name="planType" 
+                            <input
+                              type="radio"
+                              name="planType"
                               value="hebdo"
                               checked={contractForm.planType === 'hebdo'}
                               onChange={() => handlePlanTypeChange('hebdo')}
@@ -1774,9 +1772,9 @@ export default function App() {
                             <span>Formule HEBDOMADAIRE</span>
                           </label>
                           <label className="flex items-center space-x-2 text-sm text-slate-700 cursor-pointer font-semibold">
-                            <input 
-                              type="radio" 
-                              name="planType" 
+                            <input
+                              type="radio"
+                              name="planType"
                               value="mensuel"
                               checked={contractForm.planType === 'mensuel'}
                               onChange={() => handlePlanTypeChange('mensuel')}
@@ -1791,8 +1789,8 @@ export default function App() {
                         <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
                           Nombre d'échéances ({contractForm.planType === 'hebdo' ? 'Semaines' : 'Mois'})
                         </label>
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           required
                           min="1"
                           max="100"
@@ -1807,8 +1805,8 @@ export default function App() {
                       <div>
                         <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Acompte Initial (Saisie Libre)</label>
                         <div className="relative">
-                          <input 
-                            type="number" 
+                          <input
+                            type="number"
                             required
                             min="0"
                             placeholder="0"
@@ -1833,8 +1831,8 @@ export default function App() {
                       <div>
                         <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Montant de la traite (Calculé)</label>
                         <div className="relative">
-                          <input 
-                            type="number" 
+                          <input
+                            type="number"
                             readOnly
                             value={contractForm.installmentAmountUsd}
                             className="w-full bg-slate-100 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 text-slate-800 font-mono font-bold text-center"
@@ -1846,8 +1844,8 @@ export default function App() {
 
                       <div>
                         <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Jour de paiement fixe</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           required
                           value={contractForm.paymentDay}
                           onChange={(e) => setContractForm(prev => ({ ...prev, paymentDay: e.target.value }))}
@@ -1869,14 +1867,14 @@ export default function App() {
                     </div>
 
                     <div className="pt-4 flex justify-between border-t border-slate-100">
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => setFormStep(1)}
                         className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-6 rounded-xl transition"
                       >
                         Retour
                       </button>
-                      <button 
+                      <button
                         type="submit"
                         className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-8 rounded-xl transition flex items-center space-x-2 shadow-lg shadow-emerald-600/20 cursor-pointer"
                       >
@@ -1933,10 +1931,10 @@ export default function App() {
                   <div>
                     <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Montant perçu (USD)</label>
                     <div className="relative">
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         step="0.01"
-                        required 
+                        required
                         placeholder="21.25"
                         value={paymentForm.amountUsd}
                         onChange={(e) => setPaymentForm(prev => ({ ...prev, amountUsd: e.target.value }))}
@@ -1953,7 +1951,7 @@ export default function App() {
 
                   <div>
                     <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Méthode de paiement</label>
-                    <select 
+                    <select
                       value={paymentForm.paymentMethod}
                       onChange={(e) => setPaymentForm(prev => ({ ...prev, paymentMethod: e.target.value as any }))}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-3 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 font-bold"
@@ -1969,8 +1967,8 @@ export default function App() {
 
                 <div>
                   <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Référence de transaction / Message ID</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="Ex: MP-TRX-XXXXXX"
                     value={paymentForm.transactionRef}
                     onChange={(e) => setPaymentForm(prev => ({ ...prev, transactionRef: e.target.value }))}
@@ -1984,14 +1982,14 @@ export default function App() {
                 </div>
 
                 <div className="pt-4 flex justify-end space-x-2">
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => setActiveTab('dashboard')}
                     className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-6 rounded-xl transition text-xs cursor-pointer"
                   >
                     Annuler
                   </button>
-                  <button 
+                  <button
                     type="submit"
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-6 rounded-xl transition text-xs shadow-md shadow-emerald-600/20 cursor-pointer"
                   >
@@ -2016,14 +2014,14 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
+
                 {/* List of active delays */}
                 <div className="lg:col-span-2 space-y-4">
                   <div className="bg-white border border-slate-100 shadow-sm rounded-3xl p-6 space-y-3">
                     <h3 className="text-xs uppercase font-bold tracking-wider text-slate-800 font-display pb-2 border-b border-slate-50">
                       Portefeuille des clients en retard actif
                     </h3>
-                    
+
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse text-xs">
                         <thead>
@@ -2048,10 +2046,10 @@ export default function App() {
                             filteredDelays.map((delay) => {
                               const client = clients.find(c => c.id === delay.clientId);
                               const contract = contracts.find(c => c.contractNumber === delay.contractNumber);
-                              
+
                               return (
-                                <tr 
-                                  key={delay.id} 
+                                <tr
+                                  key={delay.id}
                                   className={`hover:bg-slate-50 transition cursor-pointer ${knoxSimulatingContract?.contractNumber === delay.contractNumber ? 'bg-orange-50/50' : ''}`}
                                   onClick={() => {
                                     if (contract) setKnoxSimulatingContract(contract);
@@ -2075,7 +2073,7 @@ export default function App() {
                                     </span>
                                   </td>
                                   <td className="p-2 text-right">
-                                    <button 
+                                    <button
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         if (contract) setKnoxSimulatingContract(contract);
@@ -2118,7 +2116,7 @@ export default function App() {
                       const phone = smartphones.find(p => p.id === knoxSimulatingContract.smartphoneId);
                       if (client && phone) {
                         return (
-                          <KnoxSimulator 
+                          <KnoxSimulator
                             contract={knoxSimulatingContract}
                             client={client}
                             smartphone={phone}
@@ -2159,7 +2157,7 @@ export default function App() {
                 {agents.map((agent) => {
                   const agentContracts = contracts.filter(c => c.agentId === agent.id);
                   const agentPayments = payments.filter(p => p.agentId === agent.id && p.status === 'Terminé');
-                  
+
                   const totalSales = agentContracts.reduce((acc, curr) => {
                     const phone = smartphones.find(p => p.id === curr.smartphoneId);
                     return acc + (phone ? phone.valueUsd : 0);
@@ -2224,8 +2222,8 @@ export default function App() {
                           </span>
                         </div>
                         <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-emerald-500" 
+                          <div
+                            className="h-full bg-emerald-500"
                             style={{ width: `${totalSales > 0 ? Math.round((totalCollected / totalSales) * 100) : 0}%` }}
                           ></div>
                         </div>
@@ -2304,9 +2302,9 @@ export default function App() {
                   <form onSubmit={handleAddSmartphoneToStock} className="space-y-4">
                     <div>
                       <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Marque</label>
-                      <input 
-                        type="text" 
-                        required 
+                      <input
+                        type="text"
+                        required
                         value={newPhoneBrand}
                         onChange={(e) => setNewPhoneBrand(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 font-bold transition"
@@ -2315,10 +2313,10 @@ export default function App() {
 
                     <div>
                       <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Modèle de Smartphone</label>
-                      <input 
-                        type="text" 
-                        required 
-                        placeholder="Ex: Galaxy A35 5G" 
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: Galaxy A35 5G"
                         value={newPhoneModel}
                         onChange={(e) => setNewPhoneModel(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 font-semibold transition"
@@ -2328,11 +2326,11 @@ export default function App() {
                     <div>
                       <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Valeur Marchande (USD)</label>
                       <div className="relative">
-                        <input 
-                          type="number" 
-                          required 
+                        <input
+                          type="number"
+                          required
                           min="1"
-                          placeholder="Ex: 340" 
+                          placeholder="Ex: 340"
                           value={newPhoneValue}
                           onChange={(e) => setNewPhoneValue(e.target.value)}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 font-mono font-bold transition"
@@ -2343,11 +2341,11 @@ export default function App() {
 
                     <div>
                       <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Code IMEI unique (15 chiffres)</label>
-                      <input 
-                        type="text" 
-                        required 
+                      <input
+                        type="text"
+                        required
                         maxLength={15}
-                        placeholder="Ex: 358901110587213" 
+                        placeholder="Ex: 358901110587213"
                         value={newPhoneImei}
                         onChange={(e) => setNewPhoneImei(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 font-mono font-bold tracking-wider transition"
@@ -2426,11 +2424,10 @@ export default function App() {
                                   type="button"
                                   onClick={() => handleDeleteSmartphoneFromStock(phone.id)}
                                   disabled={!!activeContract}
-                                  className={`p-2 rounded-lg transition-all ${
-                                    activeContract 
-                                      ? 'text-slate-300 cursor-not-allowed' 
+                                  className={`p-2 rounded-lg transition-all ${activeContract
+                                      ? 'text-slate-300 cursor-not-allowed'
                                       : 'text-red-500 hover:bg-red-50 hover:text-red-700 cursor-pointer'
-                                  }`}
+                                    }`}
                                   title={activeContract ? "Impossible de supprimer un appareil sous contrat actif" : "Supprimer du stock"}
                                 >
                                   <UserX className="w-4 h-4" />
@@ -2458,7 +2455,7 @@ export default function App() {
               </div>
 
               <div className="bg-white border border-slate-100 shadow-sm rounded-3xl p-6 md:p-8 space-y-6">
-                
+
                 {/* Knox integration diagnostics */}
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-display flex items-center">
@@ -2492,7 +2489,7 @@ export default function App() {
                   <p className="text-xs text-slate-500 leading-relaxed font-medium">
                     La réinitialisation de la base de données effacera tous les clients, contrats et paiements créés par vos agents au cours de cette session de simulation, et restaurera le jeu de données d'origine d'Ali Mobile Goma.
                   </p>
-                  
+
                   {!showResetConfirm ? (
                     <button
                       onClick={() => setShowResetConfirm(true)}
@@ -2545,7 +2542,7 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
+
                 {/* Profile Card Left */}
                 <div className="bg-white border border-slate-100 shadow-sm rounded-3xl p-6 space-y-6 flex flex-col items-center text-center">
                   {/* Profile avatar: initials from currentUser if admin, else from the selected agent */}
@@ -2592,13 +2589,13 @@ export default function App() {
 
                 {/* Profile Stats & Subordinates/Agents creation Right */}
                 <div className="lg:col-span-2 space-y-6">
-                  
+
                   {/* Session Metrics block */}
                   <div className="bg-white border border-slate-100 shadow-sm rounded-3xl p-6 space-y-4">
                     <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider font-display">
                       Statistiques de Performance de Session
                     </h4>
-                    
+
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                       <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
                         <span className="text-[9px] text-slate-400 block uppercase font-mono font-bold">Contrats Gérés</span>
@@ -2621,13 +2618,13 @@ export default function App() {
                       <div className="bg-indigo-50/50 p-3 rounded-2xl border border-indigo-100/50">
                         <span className="text-[9px] text-indigo-600 block uppercase font-mono font-bold">Taux Recouvr.</span>
                         <span className="text-lg font-black block text-indigo-700 font-mono mt-0.5">
-                          {activeAgentId === 'admin' 
+                          {activeAgentId === 'admin'
                             ? (totalPortfolioValue > 0 ? Math.round((totalEncaisse / totalPortfolioValue) * 100) : 0)
                             : (() => {
-                                const agentSales = contracts.filter(c => c.agentId === activeAgentId).reduce((acc, curr) => acc + (smartphones.find(p => p.id === curr.smartphoneId)?.valueUsd || 0), 0);
-                                const agentColl = payments.filter(p => p.agentId === activeAgentId && p.status === 'Terminé').reduce((acc, curr) => acc + curr.amountUsd, 0);
-                                return agentSales > 0 ? Math.round((agentColl / agentSales) * 100) : 0;
-                              })()}%
+                              const agentSales = contracts.filter(c => c.agentId === activeAgentId).reduce((acc, curr) => acc + (smartphones.find(p => p.id === curr.smartphoneId)?.valueUsd || 0), 0);
+                              const agentColl = payments.filter(p => p.agentId === activeAgentId && p.status === 'Terminé').reduce((acc, curr) => acc + curr.amountUsd, 0);
+                              return agentSales > 0 ? Math.round((agentColl / agentSales) * 100) : 0;
+                            })()}%
                         </span>
                       </div>
                     </div>
@@ -2648,7 +2645,7 @@ export default function App() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Rôle de l'utilisateur</label>
-                            <select 
+                            <select
                               value={newUserRole}
                               onChange={(e) => setNewUserRole(e.target.value as any)}
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 font-bold cursor-pointer"
@@ -2657,10 +2654,10 @@ export default function App() {
                               <option value="admin">Administrateur Subordonné</option>
                             </select>
                           </div>
-                          
+
                           <div>
                             <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Code d'identification (Généré)</label>
-                            <input 
+                            <input
                               type="text"
                               required
                               value={newUserCode}
@@ -2674,7 +2671,7 @@ export default function App() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Nom Complet</label>
-                            <input 
+                            <input
                               type="text"
                               required
                               value={newUserName}
@@ -2686,7 +2683,7 @@ export default function App() {
 
                           <div>
                             <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Adresse Email</label>
-                            <input 
+                            <input
                               type="email"
                               required
                               value={newUserEmail}
@@ -2700,7 +2697,7 @@ export default function App() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Numéro de Téléphone</label>
-                            <input 
+                            <input
                               type="text"
                               required
                               value={newUserPhone}
@@ -2712,7 +2709,7 @@ export default function App() {
 
                           <div>
                             <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Mot de passe initial</label>
-                            <input 
+                            <input
                               type="password"
                               required
                               value={newUserPassword}
@@ -2753,7 +2750,7 @@ export default function App() {
           <AnimatePresence>
             {selectedClientForDetails && (
               <div className="no-print fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
@@ -2763,7 +2760,7 @@ export default function App() {
                     <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider font-display">
                       Fiche d'Information Client
                     </h3>
-                    <button 
+                    <button
                       onClick={() => setSelectedClientForDetails(null)}
                       className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition"
                     >
@@ -2828,11 +2825,10 @@ export default function App() {
                                 <td className="p-2.5 text-slate-500">{p.paymentMethod}</td>
                                 <td className="p-2.5 text-right font-extrabold text-slate-900">{p.amountUsd.toFixed(2)} $</td>
                                 <td className="p-2.5 text-center">
-                                  <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                                    p.status === 'Terminé' 
-                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
+                                  <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${p.status === 'Terminé'
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                                       : 'bg-red-50 text-red-700 border border-red-100'
-                                  }`}>
+                                    }`}>
                                     {p.status}
                                   </span>
                                 </td>
@@ -2845,7 +2841,7 @@ export default function App() {
                   </div>
 
                   <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end">
-                    <button 
+                    <button
                       onClick={() => setSelectedClientForDetails(null)}
                       className="bg-orange-500 text-white hover:bg-orange-600 py-2 px-5 rounded-xl font-bold text-xs transition shadow-sm shadow-orange-500/10 cursor-pointer"
                     >
@@ -2863,7 +2859,7 @@ export default function App() {
               (() => {
                 const client = clients.find(c => c.id === viewingContractDoc.clientId);
                 const phone = smartphones.find(p => p.id === viewingContractDoc.smartphoneId);
-                
+
                 const agentName = viewingContractDoc.agentId === currentUser?.id
                   ? (currentUser?.name || 'Administrateur')
                   : (agents.find(a => a.id === viewingContractDoc.agentId)?.name || currentUser?.name || 'Agent Ali Mobile');
@@ -2904,7 +2900,7 @@ export default function App() {
 
                     {/* Print Container holding high fidelity sheet */}
                     <div className="flex-grow flex items-center justify-center">
-                      <ContractDocument 
+                      <ContractDocument
                         contract={viewingContractDoc}
                         client={client}
                         smartphone={phone}
@@ -2938,9 +2934,8 @@ export default function App() {
                   setSelectedClientForDetails(null);
                   setSelectedContract(null);
                 }}
-                className={`flex flex-col items-center justify-center flex-1 h-full relative transition-all rounded-none ${
-                  isActive ? 'text-orange-400 font-bold bg-slate-800/20' : 'text-slate-400'
-                }`}
+                className={`flex flex-col items-center justify-center flex-1 h-full relative transition-all rounded-none ${isActive ? 'text-orange-400 font-bold bg-slate-800/20' : 'text-slate-400'
+                  }`}
               >
                 <div className="relative">
                   <Icon className={`w-5 h-5 ${isActive ? 'text-orange-400' : 'text-slate-400'}`} />
