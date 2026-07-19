@@ -118,21 +118,36 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
           text-decoration-color: #a3a3a3 !important;
         }
         .custom-print-checkbox {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 14px;
-          height: 14px;
+          display: inline-block !important;
+          width: 13px !important;
+          height: 13px !important;
           border: 1.5px solid #171717 !important;
           background-color: #ffffff !important;
+          border-radius: 2px !important;
+          vertical-align: middle !important;
+          margin-right: 6px !important;
+          position: relative !important;
+          padding: 0 !important;
+          box-sizing: border-box !important;
+          flex-shrink: 0 !important;
+        }
+        .custom-print-checkbox-check {
+          position: absolute !important;
+          top: 50% !important;
+          left: 50% !important;
+          transform: translate(-50%, -50%) !important;
+          font-size: 10px !important;
+          font-weight: 900 !important;
           color: #000000 !important;
-          font-size: 10px;
-          font-weight: 900;
-          line-height: 1;
-          text-align: center;
-          border-radius: 2px;
-          vertical-align: middle;
-          margin-right: 4px;
+          line-height: 1 !important;
+          font-family: system-ui, -apple-system, sans-serif !important;
+        }
+        .custom-print-label {
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: flex-start !important;
+          vertical-align: middle !important;
+          line-height: 1 !important;
         }
       `}</style>
       {/* Header */}
@@ -203,21 +218,27 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
               <div>
                 <span className="text-neutral-500 text-xs block">Pièce d'identité fournie</span>
                 <div className="flex items-center space-x-3 mt-1">
-                  <label className="flex items-center space-x-1.5 text-xs text-neutral-800">
+                  <label className="custom-print-label text-xs text-neutral-800">
                     <span className="custom-print-checkbox">
-                      {client.identityDocType === 'Carte d\'électeur' ? '✓' : ''}
+                      {client.identityDocType === "Carte d'électeur" && (
+                        <span className="custom-print-checkbox-check">✓</span>
+                      )}
                     </span>
                     <span>Carte d'électeur</span>
                   </label>
-                  <label className="flex items-center space-x-1.5 text-xs text-neutral-800">
+                  <label className="custom-print-label text-xs text-neutral-800">
                     <span className="custom-print-checkbox">
-                      {client.identityDocType === 'Passeport' ? '✓' : ''}
+                      {client.identityDocType === 'Passeport' && (
+                        <span className="custom-print-checkbox-check">✓</span>
+                      )}
                     </span>
                     <span>Passeport</span>
                   </label>
-                  <label className="flex items-center space-x-1.5 text-xs text-neutral-800">
+                  <label className="custom-print-label text-xs text-neutral-800">
                     <span className="custom-print-checkbox">
-                      {client.identityDocType === 'Permis de conduire' ? '✓' : ''}
+                      {client.identityDocType === 'Permis de conduire' && (
+                        <span className="custom-print-checkbox-check">✓</span>
+                      )}
                     </span>
                     <span>Permis</span>
                   </label>
@@ -263,9 +284,11 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
             <div className="space-y-4">
               {/* Option A */}
               <div className={`p-3 rounded border ${contract.planType === 'hebdo' ? 'border-black bg-white shadow-sm' : 'border-neutral-200 opacity-60'}`}>
-                <label className="flex items-center space-x-2 font-bold text-neutral-950 text-xs uppercase mb-2">
+                <label className="custom-print-label font-bold text-neutral-950 text-xs uppercase mb-2">
                   <span className="custom-print-checkbox">
-                    {contract.planType === 'hebdo' ? '✓' : ''}
+                    {contract.planType === 'hebdo' && (
+                      <span className="custom-print-checkbox-check">✓</span>
+                    )}
                   </span>
                   <span>OPTION A : FORMULE HEBDOMADAIRE</span>
                 </label>
@@ -279,9 +302,11 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
 
               {/* Option B */}
               <div className={`p-3 rounded border ${contract.planType === 'mensuel' ? 'border-black bg-white shadow-sm' : 'border-neutral-200 opacity-60'}`}>
-                <label className="flex items-center space-x-2 font-bold text-neutral-950 text-xs uppercase mb-2">
+                <label className="custom-print-label font-bold text-neutral-950 text-xs uppercase mb-2">
                   <span className="custom-print-checkbox">
-                    {contract.planType === 'mensuel' ? '✓' : ''}
+                    {contract.planType === 'mensuel' && (
+                      <span className="custom-print-checkbox-check">✓</span>
+                    )}
                   </span>
                   <span>OPTION B : FORMULE MENSUELLE</span>
                 </label>
