@@ -117,6 +117,32 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
         .print-page .decoration-neutral-400 {
           text-decoration-color: #a3a3a3 !important;
         }
+        .print-page h2 {
+          margin-top: 0px !important;
+          margin-bottom: 8px !important;
+          padding-top: 4px !important;
+          padding-bottom: 4px !important;
+        }
+        .print-page .mb-6 {
+          margin-bottom: 14px !important;
+        }
+        @media print, screen {
+          .print-page .grid {
+            display: grid !important;
+          }
+          .print-page .md\:grid-cols-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+          .print-page .md\:col-span-2 {
+            grid-column: span 2 / span 2 !important;
+          }
+        }
+        .custom-imei-box {
+          margin-top: 2px !important;
+          padding-top: 3px !important;
+          padding-bottom: 3px !important;
+          line-height: 1.1 !important;
+        }
         .custom-print-checkbox {
           display: inline-block !important;
           width: 13px !important;
@@ -133,8 +159,8 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
         }
         .custom-print-checkbox-check {
           position: absolute !important;
-          top: 50% !important;
-          left: 50% !important;
+          top: 48% !important;
+          left: 58% !important;
           transform: translate(-50%, -50%) !important;
           font-size: 10px !important;
           font-weight: 900 !important;
@@ -272,7 +298,7 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
             </div>
             <div>
               <span className="text-neutral-500 text-xs block">Numéro IMEI 1</span>
-              <span className="font-mono font-bold text-neutral-900 bg-neutral-50 px-2 py-0.5 rounded border border-neutral-150 block text-center mt-1">
+              <span className="font-mono font-bold text-neutral-900 bg-neutral-50 px-2 py-0.5 rounded border border-neutral-150 block text-center mt-1 custom-imei-box">
                 {smartphone.imei}
               </span>
             </div>
