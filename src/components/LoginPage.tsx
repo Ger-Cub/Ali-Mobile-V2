@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { KeyRound, Mail, Smartphone, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { KeyRound, Mail, Smartphone, ArrowRight, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface LoginPageProps {
@@ -10,6 +10,7 @@ interface LoginPageProps {
 export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,13 +114,21 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 <KeyRound className="w-4 h-4" />
               </span>
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
-                className="w-full bg-[#0F172A] border border-[#334155] rounded-none text-sm pl-11 pr-4 py-3.5 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 text-white font-medium transition placeholder:text-slate-600"
+                className="w-full bg-[#0F172A] border border-[#334155] rounded-none text-sm pl-11 pr-12 py-3.5 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 text-white font-medium transition placeholder:text-slate-600"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-500 hover:text-white transition focus:outline-none cursor-pointer flex items-center justify-center"
+                title={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
