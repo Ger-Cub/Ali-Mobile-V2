@@ -33,11 +33,12 @@ import {
   UserPlus,
   Upload,
   Image as ImageIcon,
-  Trash2
+  Trash2,
+  LogOut,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  AliMobileDB, 
   Client, 
   Contract, 
   Smartphone, 
@@ -51,12 +52,20 @@ import { ContractDocument } from './components/ContractDocument';
 import { KnoxSimulator } from './components/KnoxSimulator';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { supabase } from './lib/supabase';
+import { supabaseDB, mapAgent } from './lib/supabaseDB';
+import { LoginPage } from './components/LoginPage';
 
 export default function App() {
   // Navigation State
   const [activeTab, setActiveTab] = useState<'dashboard' | 'contracts' | 'new_contract' | 'new_payment' | 'knox' | 'agents' | 'settings' | 'profile' | 'knox_stock'>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   
+  // Session and Auth State
+  const [session, setSession] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<Agent | null>(null);
+  const [loadingSession, setLoadingSession] = useState(true);
+
   // Data State
   const [clients, setClients] = useState<Client[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -81,6 +90,7 @@ export default function App() {
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPhone, setNewUserPhone] = useState('');
   const [newUserCode, setNewUserCode] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
 
   // New Contract Form State
   const [formStep, setFormStep] = useState(1);
@@ -109,7 +119,6 @@ export default function App() {
     imeiInput: '',
   });
 
-  // New Payment Form State
   const [paymentForm, setPaymentForm] = useState({
     contractNumber: '',
     amountUsd: '',
@@ -120,19 +129,91 @@ export default function App() {
   // Photo Upload Drag & Drop State
   const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
 
-  // Load Database on Mount
+  // Auth & Session Tracking
   useEffect(() => {
-    refreshData();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) {
+        fetchCurrentUser(session.user.id);
+      } else {
+        setLoadingSession(false);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+        fetchCurrentUser(session.user.id);
+      } else {
+        setCurrentUser(null);
+        setLoadingSession(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const refreshData = () => {
-    setClients(AliMobileDB.getClients());
-    setContracts(AliMobileDB.getContracts());
-    setPayments(AliMobileDB.getPayments());
-    setDelays(AliMobileDB.getDelayRecords());
-    setSmartphones(AliMobileDB.getSmartphones());
-    setAgents(AliMobileDB.getAgents());
-    setActiveAgentId(AliMobileDB.getActiveAgentId());
+  const fetchCurrentUser = async (userId: string) => {
+    try {
+      const { data, error } = await supabase.from('agents').select('*').eq('id', userId).single();
+      if (error) throw error;
+      const mapped = mapAgent(data);
+      setCurrentUser(mapped);
+      
+      // Default views
+      if (mapped.role === 'admin') {
+        setActiveAgentId('admin');
+      } else {
+        setActiveAgentId(mapped.id);
+      }
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+      showToast('Erreur lors du chargement du profil.', 'error');
+    } finally {
+      setLoadingSession(false);
+    }
+  };
+
+  // Realtime Subscriptions & Data Syncing
+  useEffect(() => {
+    if (!session) return;
+
+    refreshData();
+
+    // Subscribe to public schema changes in realtime
+    const dbChangesChannel = supabase
+      .channel('schema-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+        refreshData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(dbChangesChannel);
+    };
+  }, [session]);
+
+  const refreshData = async () => {
+    try {
+      const [a, s, c, co, p, d] = await Promise.all([
+        supabaseDB.getAgents(),
+        supabaseDB.getSmartphones(),
+        supabaseDB.getClients(),
+        supabaseDB.getContracts(),
+        supabaseDB.getPayments(),
+        supabaseDB.getDelayRecords()
+      ]);
+      setAgents(a);
+      setSmartphones(s);
+      setClients(c);
+      setContracts(co);
+      setPayments(p);
+      setDelays(d);
+    } catch (err) {
+      console.error('Error refreshing data from Supabase:', err);
+    }
   };
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -144,16 +225,13 @@ export default function App() {
 
   // Agent Changer
   const handleAgentChange = (id: string) => {
-    AliMobileDB.setActiveAgentId(id);
     setActiveAgentId(id);
-    showToast(`Session changée : ${id === 'admin' ? 'Administrateur Franck Alliance' : agents.find(a => a.id === id)?.name}`);
+    showToast(`Session changée : ${id === 'admin' ? 'Administrateur' : agents.find(a => a.id === id)?.name}`);
   };
 
-  // Reset database to default mock
+  // Reset database (disabled in prod)
   const handleResetDB = () => {
-    AliMobileDB.resetDatabase();
-    refreshData();
-    showToast("Base de données réinitialisée avec succès !");
+    showToast("La réinitialisation globale de la base de données est désactivée en production.", "error");
   };
 
   // Auto-generate code for new subordinate/agent
@@ -167,33 +245,35 @@ export default function App() {
   }, [newUserRole, agents]);
 
   // Handle creation of agent/sub-admin
-  const handleCreateSubordinate = (e: React.FormEvent) => {
+  const handleCreateSubordinate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserName || !newUserEmail || !newUserPhone || !newUserCode) {
+    if (!newUserName || !newUserEmail || !newUserPhone || !newUserCode || !newUserPassword) {
       showToast("Veuillez remplir tous les champs.", "error");
       return;
     }
 
-    const newAgent: Agent = {
-      id: `agent-${Date.now()}`,
-      name: newUserName,
-      email: newUserEmail,
-      phone: newUserPhone,
-      code: newUserCode
-    };
+    try {
+      showToast("Création du compte agent en cours...");
+      await supabaseDB.createAgent({
+        name: newUserName,
+        email: newUserEmail,
+        phone: newUserPhone,
+        code: newUserCode,
+        role: 'agent',
+      }, newUserPassword);
 
-    const updatedAgents = [...agents, newAgent];
-    setAgents(updatedAgents);
-    AliMobileDB.saveAgents(updatedAgents);
+      showToast(`${newUserRole === 'admin' ? 'Administrateur Adjoint' : 'Agent de Vente'} créé avec succès !`);
 
-    showToast(`${newUserRole === 'admin' ? 'Administrateur Adjoint' : 'Agent de Vente'} créé avec succès !`);
-
-    // Reset form fields
-    setNewUserName('');
-    setNewUserEmail('');
-    setNewUserPhone('');
-
-    refreshData();
+      // Reset form fields
+      setNewUserName('');
+      setNewUserEmail('');
+      setNewUserPhone('');
+      setNewUserPassword('');
+      refreshData();
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || "Erreur lors de la création de l'agent", "error");
+    }
   };
 
   // New smartphone stock form state
@@ -203,7 +283,7 @@ export default function App() {
   const [newPhoneImei, setNewPhoneImei] = useState('');
 
   // Stock Knox Handlers
-  const handleAddSmartphoneToStock = (e: React.FormEvent) => {
+  const handleAddSmartphoneToStock = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPhoneBrand || !newPhoneModel || !newPhoneValue || !newPhoneImei) {
       showToast("Veuillez remplir tous les champs du terminal.", "error");
@@ -220,38 +300,41 @@ export default function App() {
       return;
     }
 
-    const newDevice: Smartphone = {
-      id: `phone-${Date.now()}`,
-      brand: newPhoneBrand,
-      model: newPhoneModel,
-      valueUsd: parseFloat(newPhoneValue),
-      imei: newPhoneImei
-    };
+    try {
+      const newDevice = await supabaseDB.addSmartphone({
+        brand: newPhoneBrand,
+        model: newPhoneModel,
+        valueUsd: parseFloat(newPhoneValue),
+        imei: newPhoneImei
+      });
 
-    const updatedStock = [...smartphones, newDevice];
-    setSmartphones(updatedStock);
-    AliMobileDB.saveSmartphones(updatedStock);
-
-    showToast(`Appareil ${newDevice.brand} ${newDevice.model} enregistré avec succès !`);
-    
-    setNewPhoneModel('');
-    setNewPhoneValue('');
-    setNewPhoneImei('');
-    refreshData();
+      showToast(`Appareil ${newDevice.brand} ${newDevice.model} enregistré avec succès !`);
+      
+      setNewPhoneModel('');
+      setNewPhoneValue('');
+      setNewPhoneImei('');
+      refreshData();
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || "Erreur lors de l'enregistrement de l'appareil", "error");
+    }
   };
 
-  const handleDeleteSmartphoneFromStock = (phoneId: string) => {
+  const handleDeleteSmartphoneFromStock = async (phoneId: string) => {
     const isEngaged = contracts.some(c => c.smartphoneId === phoneId && c.status !== 'termine');
     if (isEngaged) {
       showToast("Impossible de supprimer cet appareil car il est engagé dans un contrat actif.", "error");
       return;
     }
 
-    const updatedStock = smartphones.filter(p => p.id !== phoneId);
-    setSmartphones(updatedStock);
-    AliMobileDB.saveSmartphones(updatedStock);
-    showToast("Appareil supprimé du stock.");
-    refreshData();
+    try {
+      await supabaseDB.deleteSmartphone(phoneId);
+      showToast("Appareil supprimé du stock.");
+      refreshData();
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || "Erreur de suppression du stock", "error");
+    }
   };
 
   // Handle Photo Upload & Base64 conversion
@@ -430,7 +513,7 @@ export default function App() {
   };
 
   // Handle Contract creation
-  const handleCreateContract = (e: React.FormEvent) => {
+  const handleCreateContract = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contractForm.smartphoneId) {
       showToast("Veuillez sélectionner un smartphone", "error");
@@ -439,9 +522,10 @@ export default function App() {
 
     try {
       // Find the current active agent
-      const currentAgentId = activeAgentId === 'admin' ? 'agent-1' : activeAgentId;
+      const currentAgentId = activeAgentId === 'admin' ? currentUser?.id || 'admin' : activeAgentId;
 
-      const result = AliMobileDB.addContractWithClient(
+      showToast("Création du contrat en cours...");
+      const result = await supabaseDB.addContractWithClient(
         {
           ...clientForm,
           agentId: currentAgentId
@@ -491,12 +575,13 @@ export default function App() {
       refreshData();
       setActiveTab('contracts');
     } catch (err: any) {
+      console.error(err);
       showToast(err.message || "Erreur de création du contrat", "error");
     }
   };
 
   // Handle Payment Submitting
-  const handleCreatePayment = (e: React.FormEvent) => {
+  const handleCreatePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!paymentForm.contractNumber || !paymentForm.amountUsd) {
       showToast("Veuillez remplir tous les champs obligatoires", "error");
@@ -504,15 +589,16 @@ export default function App() {
     }
 
     try {
-      const currentAgentId = activeAgentId === 'admin' ? 'agent-1' : activeAgentId;
+      const currentAgentId = activeAgentId === 'admin' ? currentUser?.id || 'admin' : activeAgentId;
       const amt = parseFloat(paymentForm.amountUsd);
 
-      const pay = AliMobileDB.addPayment(
+      showToast("Validation du paiement...");
+      const pay = await supabaseDB.addPayment(
         paymentForm.contractNumber,
         amt,
         paymentForm.paymentMethod,
         currentAgentId,
-        paymentForm.transactionRef
+        paymentForm.transactionRef || undefined
       );
 
       showToast(`Paiement de ${amt.toFixed(2)} $ validé avec succès pour le contrat ${paymentForm.contractNumber}`);
@@ -528,6 +614,7 @@ export default function App() {
       refreshData();
       setActiveTab('dashboard');
     } catch (err: any) {
+      console.error(err);
       showToast(err.message || "Erreur d'enregistrement du paiement", "error");
     }
   };
@@ -679,6 +766,19 @@ export default function App() {
     }
   };
 
+  if (loadingSession) {
+    return (
+      <div className="min-h-screen bg-[#0F172A] flex flex-col items-center justify-center font-sans">
+        <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
+        <h2 className="text-white text-sm font-bold tracking-wider uppercase text-xs">Initialisation d'Ali Mobile...</h2>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <LoginPage onLoginSuccess={(sess) => setSession(sess)} />;
+  }
+
   return (
     <div className="h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row font-sans relative selection:bg-orange-500/20 selection:text-orange-950 overflow-hidden">
       {/* Toast Notification */}
@@ -821,23 +921,42 @@ export default function App() {
 
           <div className="hidden md:block"></div>
 
-          {/* User Session Switcher (Admin vs Agent) */}
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-none text-xs">
-              <Briefcase className="w-3.5 h-3.5 text-slate-500 mr-2 shrink-0" />
-              <select 
-                value={activeAgentId} 
-                onChange={(e) => handleAgentChange(e.target.value)}
-                className="bg-transparent text-slate-800 font-semibold focus:outline-none cursor-pointer text-xs"
-              >
-                <option value="admin" className="bg-white text-slate-800">⚙ Franck Alliance (Admin)</option>
-                {agents.map(a => (
-                  <option key={a.id} value={a.id} className="bg-white text-slate-800">
-                    👤 {a.name} ({a.code})
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* User Session Switcher (Admin vs Agent) & Logout */}
+          <div className="flex items-center space-x-2">
+            {currentUser?.role === 'admin' ? (
+              <div className="flex items-center bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-none text-xs">
+                <Briefcase className="w-3.5 h-3.5 text-slate-500 mr-2 shrink-0" />
+                <select 
+                  value={activeAgentId} 
+                  onChange={(e) => handleAgentChange(e.target.value)}
+                  className="bg-transparent text-slate-800 font-semibold focus:outline-none cursor-pointer text-xs"
+                >
+                  <option value="admin" className="bg-white text-slate-800">⚙ Franck Alliance (Admin)</option>
+                  {agents.map(a => (
+                    <option key={a.id} value={a.id} className="bg-white text-slate-800">
+                      👤 {a.name} ({a.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="flex items-center bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-none text-xs font-semibold text-slate-800">
+                <Briefcase className="w-3.5 h-3.5 text-slate-500 mr-2 shrink-0" />
+                <span>👤 {currentUser?.name} ({currentUser?.code})</span>
+              </div>
+            )}
+
+            {/* Logout Button */}
+            <button
+              onClick={async () => {
+                const { error } = await supabase.auth.signOut();
+                if (error) console.error('Signout error:', error);
+              }}
+              className="flex items-center justify-center p-2 text-slate-500 hover:text-orange-500 hover:bg-slate-100 transition rounded-none border border-slate-200 cursor-pointer h-[32px] w-[32px]"
+              title="Se déconnecter"
+            >
+              <LogOut className="w-4.5 h-4.5" />
+            </button>
             <button 
               onClick={() => {
                 setActiveTab('new_contract');
@@ -2485,7 +2604,7 @@ export default function App() {
                   </div>
 
                   {/* Creation Form: ONLY if admin */}
-                  {activeAgentId === 'admin' ? (
+                  {currentUser?.role === 'admin' ? (
                     <div className="bg-white border border-slate-100 shadow-sm rounded-3xl p-6 space-y-4 animate-fadeIn">
                       <div className="border-b border-slate-100 pb-2">
                         <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider font-display flex items-center">
@@ -2548,16 +2667,30 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div>
-                          <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Numéro de Téléphone</label>
-                          <input 
-                            type="text"
-                            required
-                            value={newUserPhone}
-                            onChange={(e) => setNewUserPhone(e.target.value)}
-                            placeholder="Ex: +243 824 444 204"
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
-                          />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Numéro de Téléphone</label>
+                            <input 
+                              type="text"
+                              required
+                              value={newUserPhone}
+                              onChange={(e) => setNewUserPhone(e.target.value)}
+                              placeholder="Ex: +243 824 444 204"
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Mot de passe initial</label>
+                            <input 
+                              type="password"
+                              required
+                              value={newUserPassword}
+                              onChange={(e) => setNewUserPassword(e.target.value)}
+                              placeholder="Mot de passe temporaire..."
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
+                            />
+                          </div>
                         </div>
 
                         <div className="pt-2 flex justify-end">

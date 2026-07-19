@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldAlert, PhoneCall, RefreshCw, Smartphone as PhoneIcon, CheckCircle2, Lock, Unlock, Wifi, Battery } from 'lucide-react';
-import { Client, Contract, Smartphone, USD_TO_CDF, AliMobileDB } from '../data/db';
+import { Client, Contract, Smartphone, USD_TO_CDF } from '../data/db';
+import { supabaseDB } from '../lib/supabaseDB';
 
 interface KnoxSimulatorProps {
   contract: Contract;
@@ -46,14 +47,14 @@ export const KnoxSimulator: React.FC<KnoxSimulatorProps> = ({
     setPinError(false);
     
     // Simulate mobile money API check delay (2 seconds instead of 2 minutes for demo!)
-    setTimeout(() => {
+    setTimeout(async () => {
       // Create a successful payment in DB
       try {
-        AliMobileDB.addPayment(
+        await supabaseDB.addPayment(
           contract.contractNumber,
           contract.installmentAmountUsd,
           'Mobile Money (M-Pesa)',
-          'agent-1', // system auto-agent
+          contract.agentId, // system agent from contract
           `MP-AUTO-${Math.floor(100000 + Math.random() * 900000)}`
         );
         
@@ -75,11 +76,17 @@ export const KnoxSimulator: React.FC<KnoxSimulatorProps> = ({
     // Simulate manual administrative bypass code (for testing, code is 1234 or 2026)
     if (pin === '2026' || pin === '1234') {
       setStatusText('paying');
-      setTimeout(() => {
-        setIsLocked(false);
-        setStatusText('unlocked');
-        if (onUnlockSuccess) {
-          onUnlockSuccess();
+      setTimeout(async () => {
+        try {
+          await supabaseDB.unlockKnoxContract(contract.contractNumber);
+          setIsLocked(false);
+          setStatusText('unlocked');
+          if (onUnlockSuccess) {
+            onUnlockSuccess();
+          }
+        } catch (err) {
+          console.error(err);
+          setStatusText('locked');
         }
       }, 1000);
     } else {
@@ -88,6 +95,7 @@ export const KnoxSimulator: React.FC<KnoxSimulatorProps> = ({
       setTimeout(() => setPinError(false), 4000);
     }
   };
+
 
   return (
     <div className="flex flex-col items-center justify-center p-4">
