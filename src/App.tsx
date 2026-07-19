@@ -30,7 +30,10 @@ import {
   Download,
   Lock,
   User,
-  UserPlus
+  UserPlus,
+  Upload,
+  Image as ImageIcon,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -51,7 +54,7 @@ import html2canvas from 'html2canvas';
 
 export default function App() {
   // Navigation State
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'contracts' | 'new_contract' | 'new_payment' | 'knox' | 'agents' | 'settings' | 'profile'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'contracts' | 'new_contract' | 'new_payment' | 'knox' | 'agents' | 'settings' | 'profile' | 'knox_stock'>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   
   // Data State
@@ -93,6 +96,7 @@ export default function App() {
     cityCommune: 'Goma',
     identityDocType: "Carte d'électeur" as Client['identityDocType'],
     identityDocNum: '',
+    identityCardPhoto: '',
   });
 
   const [contractForm, setContractForm] = useState({
@@ -102,6 +106,7 @@ export default function App() {
     installmentAmountUsd: 0,
     totalInstallments: 8,
     paymentDay: 'Samedi',
+    imeiInput: '',
   });
 
   // New Payment Form State
@@ -111,6 +116,9 @@ export default function App() {
     paymentMethod: 'Mobile Money (M-Pesa)' as Payment['paymentMethod'],
     transactionRef: '',
   });
+
+  // Photo Upload Drag & Drop State
+  const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
 
   // Load Database on Mount
   useEffect(() => {
@@ -188,28 +196,238 @@ export default function App() {
     refreshData();
   };
 
+  // New smartphone stock form state
+  const [newPhoneBrand, setNewPhoneBrand] = useState('Samsung');
+  const [newPhoneModel, setNewPhoneModel] = useState('');
+  const [newPhoneValue, setNewPhoneValue] = useState('');
+  const [newPhoneImei, setNewPhoneImei] = useState('');
+
+  // Stock Knox Handlers
+  const handleAddSmartphoneToStock = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPhoneBrand || !newPhoneModel || !newPhoneValue || !newPhoneImei) {
+      showToast("Veuillez remplir tous les champs du terminal.", "error");
+      return;
+    }
+
+    if (newPhoneImei.length !== 15 || !/^\d+$/.test(newPhoneImei)) {
+      showToast("L'IMEI doit être composé de 15 chiffres.", "error");
+      return;
+    }
+
+    if (smartphones.some(p => p.imei === newPhoneImei)) {
+      showToast("Un smartphone avec cet IMEI existe déjà dans le stock.", "error");
+      return;
+    }
+
+    const newDevice: Smartphone = {
+      id: `phone-${Date.now()}`,
+      brand: newPhoneBrand,
+      model: newPhoneModel,
+      valueUsd: parseFloat(newPhoneValue),
+      imei: newPhoneImei
+    };
+
+    const updatedStock = [...smartphones, newDevice];
+    setSmartphones(updatedStock);
+    AliMobileDB.saveSmartphones(updatedStock);
+
+    showToast(`Appareil ${newDevice.brand} ${newDevice.model} enregistré avec succès !`);
+    
+    setNewPhoneModel('');
+    setNewPhoneValue('');
+    setNewPhoneImei('');
+    refreshData();
+  };
+
+  const handleDeleteSmartphoneFromStock = (phoneId: string) => {
+    const isEngaged = contracts.some(c => c.smartphoneId === phoneId && c.status !== 'termine');
+    if (isEngaged) {
+      showToast("Impossible de supprimer cet appareil car il est engagé dans un contrat actif.", "error");
+      return;
+    }
+
+    const updatedStock = smartphones.filter(p => p.id !== phoneId);
+    setSmartphones(updatedStock);
+    AliMobileDB.saveSmartphones(updatedStock);
+    showToast("Appareil supprimé du stock.");
+    refreshData();
+  };
+
+  // Handle Photo Upload & Base64 conversion
+  const handlePhotoUpload = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      showToast("Veuillez sélectionner un fichier image valide (JPG, PNG).", "error");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        setClientForm(prev => ({
+          ...prev,
+          identityCardPhoto: e.target.result as string
+        }));
+        showToast("Photo de la pièce d'identité chargée !");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Dynamic values helper in forms
-  useEffect(() => {
-    if (contractForm.smartphoneId) {
-      const phone = smartphones.find(p => p.id === contractForm.smartphoneId);
-      if (phone) {
-        const val = phone.valueUsd;
-        const deposit = Math.round(val * 0.5); // 50% deposit
-        const remaining = val - deposit;
+  const handleSmartphoneSelect = (phoneId: string) => {
+    const phone = smartphones.find(p => p.id === phoneId);
+    if (phone) {
+      const defaultDeposit = Math.round(phone.valueUsd * 0.5);
+      const installments = contractForm.planType === 'hebdo' ? 8 : 2;
+      const remaining = phone.valueUsd - defaultDeposit;
+      const instAmount = Number((remaining / installments).toFixed(2));
+      const day = contractForm.planType === 'hebdo' ? 'Samedi' : '05';
+      
+      setContractForm(prev => ({
+        ...prev,
+        smartphoneId: phoneId,
+        imeiInput: phone.imei,
+        initialDepositUsd: defaultDeposit,
+        installmentAmountUsd: instAmount,
+        totalInstallments: installments,
+        paymentDay: day
+      }));
+    } else {
+      setContractForm(prev => ({
+        ...prev,
+        smartphoneId: '',
+        imeiInput: '',
+        initialDepositUsd: 0,
+        installmentAmountUsd: 0
+      }));
+    }
+  };
+
+  const handleImeiChange = (val: string) => {
+    const matchedPhone = smartphones.find(p => p.imei === val);
+    
+    if (matchedPhone) {
+      if (matchedPhone.id !== contractForm.smartphoneId) {
+        const defaultDeposit = Math.round(matchedPhone.valueUsd * 0.5);
         const installments = contractForm.planType === 'hebdo' ? 8 : 2;
+        const remaining = matchedPhone.valueUsd - defaultDeposit;
         const instAmount = Number((remaining / installments).toFixed(2));
         const day = contractForm.planType === 'hebdo' ? 'Samedi' : '05';
-
+        
         setContractForm(prev => ({
           ...prev,
-          initialDepositUsd: deposit,
+          smartphoneId: matchedPhone.id,
+          imeiInput: val,
+          initialDepositUsd: defaultDeposit,
           installmentAmountUsd: instAmount,
           totalInstallments: installments,
           paymentDay: day
         }));
+      } else {
+        setContractForm(prev => ({
+          ...prev,
+          imeiInput: val
+        }));
       }
+    } else {
+      // Look for fuzzy match / startswith to help select but don't force if typed incompletely
+      const partialMatch = smartphones.find(p => p.imei.startsWith(val));
+      if (partialMatch && val.length >= 6) {
+        if (partialMatch.id !== contractForm.smartphoneId) {
+          const defaultDeposit = Math.round(partialMatch.valueUsd * 0.5);
+          const installments = contractForm.planType === 'hebdo' ? 8 : 2;
+          const remaining = partialMatch.valueUsd - defaultDeposit;
+          const instAmount = Number((remaining / installments).toFixed(2));
+          const day = contractForm.planType === 'hebdo' ? 'Samedi' : '05';
+          
+          setContractForm(prev => ({
+            ...prev,
+            smartphoneId: partialMatch.id,
+            imeiInput: val,
+            initialDepositUsd: defaultDeposit,
+            installmentAmountUsd: instAmount,
+            totalInstallments: installments,
+            paymentDay: day
+          }));
+          return;
+        }
+      }
+
+      setContractForm(prev => ({
+        ...prev,
+        smartphoneId: '',
+        imeiInput: val,
+        initialDepositUsd: 0,
+        installmentAmountUsd: 0
+      }));
     }
-  }, [contractForm.smartphoneId, contractForm.planType, smartphones]);
+  };
+
+  const handlePlanTypeChange = (type: PaymentPlanType) => {
+    const phone = smartphones.find(p => p.id === contractForm.smartphoneId);
+    const installments = type === 'hebdo' ? 8 : 2;
+    const day = type === 'hebdo' ? 'Samedi' : '05';
+    
+    if (phone) {
+      const remaining = phone.valueUsd - contractForm.initialDepositUsd;
+      const instAmount = Number((remaining / installments).toFixed(2));
+      
+      setContractForm(prev => ({
+        ...prev,
+        planType: type,
+        totalInstallments: installments,
+        installmentAmountUsd: instAmount >= 0 ? instAmount : 0,
+        paymentDay: day
+      }));
+    } else {
+      setContractForm(prev => ({
+        ...prev,
+        planType: type,
+        totalInstallments: installments,
+        paymentDay: day
+      }));
+    }
+  };
+
+  const handleInitialDepositChange = (amount: number) => {
+    const phone = smartphones.find(p => p.id === contractForm.smartphoneId);
+    const installments = contractForm.totalInstallments || (contractForm.planType === 'hebdo' ? 8 : 2);
+    
+    if (phone) {
+      const remaining = phone.valueUsd - amount;
+      const instAmount = Number((remaining / installments).toFixed(2));
+      
+      setContractForm(prev => ({
+        ...prev,
+        initialDepositUsd: amount,
+        installmentAmountUsd: instAmount >= 0 ? instAmount : 0
+      }));
+    } else {
+      setContractForm(prev => ({
+        ...prev,
+        initialDepositUsd: amount
+      }));
+    }
+  };
+
+  const handleTotalInstallmentsChange = (installments: number) => {
+    const phone = smartphones.find(p => p.id === contractForm.smartphoneId);
+    if (phone) {
+      const remaining = phone.valueUsd - contractForm.initialDepositUsd;
+      const instAmount = Number((remaining / (installments || 1)).toFixed(2));
+      
+      setContractForm(prev => ({
+        ...prev,
+        totalInstallments: installments,
+        installmentAmountUsd: instAmount >= 0 ? instAmount : 0
+      }));
+    } else {
+      setContractForm(prev => ({
+        ...prev,
+        totalInstallments: installments
+      }));
+    }
+  };
 
   // Handle Contract creation
   const handleCreateContract = (e: React.FormEvent) => {
@@ -258,6 +476,7 @@ export default function App() {
         cityCommune: 'Goma',
         identityDocType: "Carte d'électeur",
         identityDocNum: '',
+        identityCardPhoto: '',
       });
       setContractForm({
         smartphoneId: '',
@@ -266,6 +485,7 @@ export default function App() {
         installmentAmountUsd: 0,
         totalInstallments: 8,
         paymentDay: 'Samedi',
+        imeiInput: '',
       });
       setFormStep(1);
       refreshData();
@@ -523,6 +743,7 @@ export default function App() {
               { id: 'new_payment', label: 'Ajouter un paiement', icon: Coins },
               { id: 'knox', label: 'Voir ses retards', icon: ShieldAlert, badge: filteredDelays.length > 0 ? filteredDelays.length : undefined },
               { id: 'agents', label: 'Statistiques Agents', icon: Activity },
+              { id: 'knox_stock', label: 'Stock Samsung Knox', icon: Database },
               { id: 'settings', label: 'Paramètres', icon: Settings },
             ].map((item) => {
               const Icon = item.icon;
@@ -1251,11 +1472,91 @@ export default function App() {
                       </div>
                     </div>
 
+                    {/* Photo de la pièce d'identité */}
+                    <div className="border-t border-slate-100 pt-3">
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1.5">
+                        Photo de la pièce d'identité (Requis pour validation)
+                      </label>
+                      
+                      {!clientForm.identityCardPhoto ? (
+                        <div 
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setIsDraggingPhoto(true);
+                          }}
+                          onDragLeave={(e) => {
+                            e.preventDefault();
+                            setIsDraggingPhoto(false);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDraggingPhoto(false);
+                            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                              handlePhotoUpload(e.dataTransfer.files[0]);
+                            }
+                          }}
+                          className={`border-2 border-dashed rounded-2xl p-6 text-center transition flex flex-col items-center justify-center cursor-pointer ${
+                            isDraggingPhoto 
+                              ? 'border-orange-500 bg-orange-50/50' 
+                              : 'border-slate-200 bg-slate-50 hover:bg-slate-100/50'
+                          }`}
+                          onClick={() => document.getElementById('identity-photo-file-input')?.click()}
+                        >
+                          <input 
+                            type="file"
+                            id="identity-photo-file-input"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                handlePhotoUpload(e.target.files[0]);
+                              }
+                            }}
+                          />
+                          <Upload className="w-8 h-8 text-slate-400 mb-2" />
+                          <span className="text-sm font-bold text-slate-700 block">
+                            Glisser-déposer ou cliquer pour ajouter la photo de la pièce
+                          </span>
+                          <span className="text-xs text-slate-400 block mt-1">
+                            Formats JPG, PNG, WEBP acceptés (Max 5Mo)
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                          <div className="flex items-center space-x-3.5 w-full sm:w-auto">
+                            <div className="w-16 h-12 bg-white rounded-lg border border-slate-100 overflow-hidden flex items-center justify-center shrink-0">
+                              <img 
+                                src={clientForm.identityCardPhoto} 
+                                alt="Aperçu pièce" 
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div className="text-left truncate max-w-[200px] sm:max-w-[300px]">
+                              <span className="text-sm font-bold text-slate-800 block truncate">
+                                Piece_Identite_{clientForm.lastName || 'Client'}.png
+                              </span>
+                              <span className="text-xs text-emerald-600 font-bold flex items-center">
+                                <CheckCircle className="w-3.5 h-3.5 mr-1" /> Document chargé avec succès
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setClientForm(prev => ({ ...prev, identityCardPhoto: '' }))}
+                            className="text-xs text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100/50 px-3 py-2 rounded-xl font-bold flex items-center space-x-1.5 transition shrink-0"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            <span>Supprimer la photo</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="pt-4 flex justify-end">
                       <button 
                         type="button" 
                         onClick={() => setFormStep(2)}
-                        disabled={!clientForm.lastName || !clientForm.firstName || !clientForm.phoneWhatsApp || !clientForm.identityDocNum}
+                        disabled={!clientForm.lastName || !clientForm.firstName || !clientForm.phoneWhatsApp || !clientForm.identityDocNum || !clientForm.identityCardPhoto}
                         className="bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-40 font-bold py-3 px-8 rounded-xl transition shadow-md shadow-orange-500/20 active:scale-98 cursor-pointer"
                       >
                         Suivant : Smartphone & Plan de Paiement
@@ -1276,7 +1577,7 @@ export default function App() {
                         <select 
                           required
                           value={contractForm.smartphoneId}
-                          onChange={(e) => setContractForm(prev => ({ ...prev, smartphoneId: e.target.value }))}
+                          onChange={(e) => handleSmartphoneSelect(e.target.value)}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-3 focus:outline-none focus:border-orange-500 focus:bg-white cursor-pointer text-slate-800 font-bold"
                         >
                           <option value="">-- Choisir dans le stock Samsung Knox --</option>
@@ -1289,15 +1590,25 @@ export default function App() {
                       </div>
 
                       <div>
-                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">IMEI du Smartphone (Auto ou Saisi)</label>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Saisir / Scanner IMEI (Recherche Auto)</label>
                         <input 
                           type="text" 
                           required 
-                          placeholder="35..." 
-                          value={smartphones.find(p => p.id === contractForm.smartphoneId)?.imei || ''}
-                          readOnly
-                          className="w-full bg-slate-100 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none text-slate-500 font-mono text-center font-semibold"
+                          maxLength={15}
+                          placeholder="Saisir l'IMEI à 15 chiffres..." 
+                          value={contractForm.imeiInput}
+                          onChange={(e) => handleImeiChange(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-3 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 font-mono text-center font-bold transition"
                         />
+                        {contractForm.smartphoneId ? (
+                          <span className="text-[10px] text-emerald-600 font-bold mt-1 block text-center">
+                            ✓ Appareil identifié : {smartphones.find(p => p.id === contractForm.smartphoneId)?.brand} {smartphones.find(p => p.id === contractForm.smartphoneId)?.model} ({smartphones.find(p => p.id === contractForm.smartphoneId)?.valueUsd} $)
+                          </span>
+                        ) : contractForm.imeiInput.length > 0 ? (
+                          <span className="text-[10px] text-amber-600 font-semibold mt-1 block text-center">
+                            🔍 Recherche de l'IMEI dans le stock...
+                          </span>
+                        ) : null}
                       </div>
                     </div>
 
@@ -1311,7 +1622,7 @@ export default function App() {
                               name="planType" 
                               value="hebdo"
                               checked={contractForm.planType === 'hebdo'}
-                              onChange={() => setContractForm(prev => ({ ...prev, planType: 'hebdo' }))}
+                              onChange={() => handlePlanTypeChange('hebdo')}
                               className="text-orange-500 focus:ring-orange-500 border-slate-300 bg-white h-4 w-4"
                             />
                             <span>Formule HEBDOMADAIRE</span>
@@ -1322,7 +1633,7 @@ export default function App() {
                               name="planType" 
                               value="mensuel"
                               checked={contractForm.planType === 'mensuel'}
-                              onChange={() => setContractForm(prev => ({ ...prev, planType: 'mensuel' }))}
+                              onChange={() => handlePlanTypeChange('mensuel')}
                               className="text-orange-500 focus:ring-orange-500 border-slate-300 bg-white h-4 w-4"
                             />
                             <span>Formule MENSUELLE</span>
@@ -1331,33 +1642,50 @@ export default function App() {
                       </div>
 
                       <div>
-                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Nombre d'échéances</label>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                          Nombre d'échéances ({contractForm.planType === 'hebdo' ? 'Semaines' : 'Mois'})
+                        </label>
                         <input 
-                          type="text" 
-                          readOnly 
-                          value={contractForm.planType === 'hebdo' ? '8 semaines' : '2 mois'}
-                          className="w-full bg-slate-100 border border-slate-200 rounded-xl text-sm p-2 text-center text-slate-500 font-bold"
+                          type="number" 
+                          required
+                          min="1"
+                          max="100"
+                          value={contractForm.totalInstallments}
+                          onChange={(e) => handleTotalInstallmentsChange(parseInt(e.target.value) || 1)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 font-mono text-center font-bold transition"
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-100 pt-4">
                       <div>
-                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Acompte Initial (50%)</label>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Acompte Initial (Saisie Libre)</label>
                         <div className="relative">
                           <input 
                             type="number" 
-                            readOnly
-                            value={contractForm.initialDepositUsd}
-                            className="w-full bg-slate-100 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 text-slate-600 font-mono font-bold text-center"
+                            required
+                            min="0"
+                            placeholder="0"
+                            value={contractForm.initialDepositUsd || ''}
+                            onChange={(e) => handleInitialDepositChange(parseFloat(e.target.value) || 0)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 text-slate-800 font-mono font-bold text-center focus:outline-none focus:border-orange-500 focus:bg-white transition"
                           />
                           <span className="absolute right-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 font-mono text-xs">$</span>
                         </div>
-                        <span className="text-[10px] text-slate-500 text-center block mt-1 font-medium">{(contractForm.initialDepositUsd * USD_TO_CDF).toLocaleString()} CDF payés ce jour</span>
+                        {contractForm.smartphoneId && (
+                          <div className="text-center mt-1 space-y-0.5">
+                            <span className="text-[10px] text-slate-500 block font-semibold">
+                              {(contractForm.initialDepositUsd * USD_TO_CDF).toLocaleString()} CDF payés ce jour
+                            </span>
+                            <span className="text-[10px] text-orange-600 font-bold block">
+                              Soit {((contractForm.initialDepositUsd / (smartphones.find(p => p.id === contractForm.smartphoneId)?.valueUsd || 1)) * 100).toFixed(0)}% de la valeur
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       <div>
-                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Montant de la traite</label>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Montant de la traite (Calculé)</label>
                         <div className="relative">
                           <input 
                             type="number" 
@@ -1759,6 +2087,216 @@ export default function App() {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* Stock Samsung Knox Tab */}
+          {activeTab === 'knox_stock' && (
+            <div className="no-print space-y-6 max-w-6xl mx-auto w-full">
+              <div className="border-b border-slate-200 pb-4">
+                <h1 className="text-2xl font-black text-slate-900 tracking-tight font-display uppercase italic">
+                  Stock Samsung Knox
+                </h1>
+                <p className="text-xs text-slate-500 mt-1">Enregistrement des nouveaux appareils de la boutique Ali Mobile et suivi d'intégration dans l'application Samsung Knox.</p>
+              </div>
+
+              {/* Stats Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-white p-5 border border-slate-100 rounded-3xl shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">Appareils en Stock</span>
+                    <div className="p-2 bg-blue-50 text-blue-500 rounded-xl">
+                      <PhoneIcon className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-baseline space-x-2">
+                    <span className="text-3xl font-black text-slate-900 font-mono">{smartphones.length}</span>
+                    <span className="text-xs text-slate-500">unités</span>
+                  </div>
+                </div>
+
+                <div className="bg-white p-5 border border-slate-100 rounded-3xl shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">Disponibles à la Vente</span>
+                    <div className="p-2 bg-emerald-50 text-emerald-500 rounded-xl">
+                      <CheckCircle className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-baseline space-x-2">
+                    <span className="text-3xl font-black text-emerald-600 font-mono">
+                      {smartphones.filter(p => !contracts.some(c => c.smartphoneId === p.id && c.status !== 'termine')).length}
+                    </span>
+                    <span className="text-xs text-slate-500">unités</span>
+                  </div>
+                </div>
+
+                <div className="bg-white p-5 border border-slate-100 rounded-3xl shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">Valeur Totale Stock</span>
+                    <div className="p-2 bg-orange-50 text-orange-500 rounded-xl">
+                      <Coins className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-baseline space-x-2">
+                    <span className="text-3xl font-black text-orange-500 font-mono">
+                      {smartphones.reduce((acc, curr) => acc + curr.valueUsd, 0).toLocaleString()} $
+                    </span>
+                    <span className="text-xs text-slate-500 font-medium">
+                      (~{(smartphones.reduce((acc, curr) => acc + curr.valueUsd, 0) * USD_TO_CDF).toLocaleString()} CDF)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Form to add device */}
+                <div className="bg-white border border-slate-100 shadow-sm rounded-3xl p-6 h-fit space-y-4">
+                  <h3 className="text-base font-black text-slate-900 uppercase tracking-tight font-display border-b border-slate-50 pb-2">
+                    Ajouter un Terminal
+                  </h3>
+                  <form onSubmit={handleAddSmartphoneToStock} className="space-y-4">
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Marque</label>
+                      <input 
+                        type="text" 
+                        required 
+                        value={newPhoneBrand}
+                        onChange={(e) => setNewPhoneBrand(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 font-bold transition"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Modèle de Smartphone</label>
+                      <input 
+                        type="text" 
+                        required 
+                        placeholder="Ex: Galaxy A35 5G" 
+                        value={newPhoneModel}
+                        onChange={(e) => setNewPhoneModel(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 font-semibold transition"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Valeur Marchande (USD)</label>
+                      <div className="relative">
+                        <input 
+                          type="number" 
+                          required 
+                          min="1"
+                          placeholder="Ex: 340" 
+                          value={newPhoneValue}
+                          onChange={(e) => setNewPhoneValue(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 font-mono font-bold transition"
+                        />
+                        <span className="absolute right-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 font-mono text-sm">$</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Code IMEI unique (15 chiffres)</label>
+                      <input 
+                        type="text" 
+                        required 
+                        maxLength={15}
+                        placeholder="Ex: 358901110587213" 
+                        value={newPhoneImei}
+                        onChange={(e) => setNewPhoneImei(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl text-sm px-3.5 py-2.5 focus:outline-none focus:border-orange-500 focus:bg-white text-slate-800 font-mono font-bold tracking-wider transition"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full bg-orange-500 text-white font-bold py-3 px-4 rounded-xl transition hover:bg-orange-600 shadow-md shadow-orange-500/10 active:scale-98 flex items-center justify-center space-x-2"
+                    >
+                      <PlusCircle className="w-5 h-5" />
+                      <span>Ajouter au Stock</span>
+                    </button>
+                  </form>
+                </div>
+
+                {/* Stock table list */}
+                <div className="bg-white border border-slate-100 shadow-sm rounded-3xl p-6 lg:col-span-2 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base font-black text-slate-900 uppercase tracking-tight font-display">
+                      Inventaire des Appareils Knox
+                    </h3>
+                    <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-1 font-mono font-bold">
+                      TOTAL : {smartphones.length} Appareils
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-500">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-slate-400 uppercase tracking-wider text-[10px] font-bold font-display">
+                          <th className="py-3 px-2">Terminal</th>
+                          <th className="py-3 px-2">Code IMEI</th>
+                          <th className="py-3 px-2">Valeur USD</th>
+                          <th className="py-3 px-2">Statut Intégration</th>
+                          <th className="py-3 px-2 text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {smartphones.map(phone => {
+                          const activeContract = contracts.find(c => c.smartphoneId === phone.id && c.status !== 'termine');
+                          const clientObj = activeContract ? clients.find(cl => cl.id === activeContract.clientId) : null;
+                          const clientName = clientObj ? `${clientObj.lastName} ${clientObj.firstName}` : null;
+
+                          return (
+                            <tr key={phone.id} className="hover:bg-slate-50/50 transition">
+                              <td className="py-3 px-2 font-bold text-slate-800">
+                                {phone.brand} {phone.model}
+                              </td>
+                              <td className="py-3 px-2 font-mono font-medium text-slate-600">
+                                {phone.imei}
+                              </td>
+                              <td className="py-3 px-2 font-mono font-bold text-slate-950">
+                                {phone.valueUsd} $
+                              </td>
+                              <td className="py-3 px-2">
+                                {activeContract ? (
+                                  <div className="space-y-0.5">
+                                    <span className="bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 text-[10px] rounded-none inline-block border border-slate-200">
+                                      Engagé (Contrat {activeContract.contractNumber})
+                                    </span>
+                                    {clientName && (
+                                      <span className="text-[10px] text-slate-400 block font-medium truncate max-w-[150px]">
+                                        Client: {clientName}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 text-[10px] rounded-none inline-block border border-emerald-100">
+                                    Disponible en Stock
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-2 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSmartphoneFromStock(phone.id)}
+                                  disabled={!!activeContract}
+                                  className={`p-2 rounded-lg transition-all ${
+                                    activeContract 
+                                      ? 'text-slate-300 cursor-not-allowed' 
+                                      : 'text-red-500 hover:bg-red-50 hover:text-red-700 cursor-pointer'
+                                  }`}
+                                  title={activeContract ? "Impossible de supprimer un appareil sous contrat actif" : "Supprimer du stock"}
+                                >
+                                  <UserX className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
           )}

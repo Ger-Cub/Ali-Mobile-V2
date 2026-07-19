@@ -154,9 +154,9 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
                   <span>OPTION A : FORMULE HEBDOMADAIRE</span>
                 </label>
                 <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 pl-6 text-xs text-neutral-800 list-disc">
-                  <li>Acompte Initial (50%) : <span className="font-bold text-black">{contract.planType === 'hebdo' ? contract.initialDepositUsd : (smartphone.valueUsd / 2)} $</span> <span className="text-neutral-500">(Payés ce jour)</span></li>
+                  <li>Acompte Initial : <span className="font-bold text-black">{contract.planType === 'hebdo' ? contract.initialDepositUsd : (smartphone.valueUsd / 2)} $</span> <span className="text-neutral-500">(Payés ce jour)</span></li>
                   <li>Montant de la traite : <span className="font-bold text-black">{contract.planType === 'hebdo' ? contract.installmentAmountUsd : (smartphone.valueUsd / 2 / 8)} $</span> par semaine</li>
-                  <li>Nombre d'échéances : <span className="font-semibold">8 semaines</span></li>
+                  <li>Nombre d'échéances : <span className="font-semibold">{contract.planType === 'hebdo' ? `${contract.totalInstallments} semaines` : '8 semaines'}</span></li>
                   <li>Jour de paiement fixe : <span className="font-semibold text-red-600">Chaque samedi avant minuit</span></li>
                 </ul>
               </div>
@@ -168,9 +168,9 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
                   <span>OPTION B : FORMULE MENSUELLE</span>
                 </label>
                 <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 pl-6 text-xs text-neutral-800 list-disc">
-                  <li>Acompte Initial (50%) : <span className="font-bold text-black">{contract.planType === 'mensuel' ? contract.initialDepositUsd : (smartphone.valueUsd / 2)} $</span> <span className="text-neutral-500">(Payés ce jour)</span></li>
+                  <li>Acompte Initial : <span className="font-bold text-black">{contract.planType === 'mensuel' ? contract.initialDepositUsd : (smartphone.valueUsd / 2)} $</span> <span className="text-neutral-500">(Payés ce jour)</span></li>
                   <li>Montant de la traite : <span className="font-bold text-black">{contract.planType === 'mensuel' ? contract.installmentAmountUsd : (smartphone.valueUsd / 2 / 2)} $</span> par mois</li>
-                  <li>Nombre d'échéances : <span className="font-semibold">2 mois</span></li>
+                  <li>Nombre d'échéances : <span className="font-semibold">{contract.planType === 'mensuel' ? `${contract.totalInstallments} mois` : '2 mois'}</span></li>
                   <li>Jour de paiement fixe : <span className="font-semibold">Le {contract.planType === 'mensuel' ? contract.paymentDay : '____'} de chaque mois</span></li>
                 </ul>
               </div>
@@ -266,6 +266,26 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
               <span className="text-[10px] text-neutral-400 text-center italic mt-auto">Signature & cachet autorisés</span>
             </div>
           </div>
+
+          {/* Identity Document Photo Display */}
+          {client.identityCardPhoto && (
+            <div className="mt-8 pt-6 border-t border-dashed border-neutral-300 flex flex-col items-center">
+              <h3 className="text-xs font-bold text-neutral-800 uppercase tracking-wider mb-3">
+                Annexe : Copie de la pièce d'identité ({client.identityDocType})
+              </h3>
+              <div className="border border-neutral-200 bg-neutral-50 p-3 rounded-lg max-w-sm w-full flex items-center justify-center overflow-hidden">
+                <img 
+                  src={client.identityCardPhoto} 
+                  alt={`Pièce d'identité - ${client.lastName} ${client.firstName}`}
+                  className="max-h-[180px] object-contain rounded shadow-sm border border-neutral-200"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+              <p className="text-[10px] text-neutral-400 mt-1.5 font-mono">
+                Numéro de pièce : {client.identityDocNum}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

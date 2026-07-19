@@ -34,6 +34,7 @@ export interface Client {
   identityDocNum: string;
   registeredAt: string;   // Date d'enregistrement
   agentId: string;        // Agent qui a créé le contrat
+  identityCardPhoto?: string; // Photo of the identity document (base64 string)
 }
 
 export type PaymentPlanType = 'hebdo' | 'mensuel';
