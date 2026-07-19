@@ -950,7 +950,7 @@ export default function App() {
           {/* User Session Switcher (Admin vs Agent) & Logout */}
           <div className="flex items-center space-x-2">
             {currentUser?.role === 'admin' ? (
-              <div className="flex items-center bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-none text-xs">
+              <div className="hidden">
                 {/**<Briefcase className="w-3.5 h-3.5 text-slate-500 mr-2 shrink-0" />
                 <select 
                   value={activeAgentId} 
