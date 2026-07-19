@@ -158,7 +158,32 @@ export default function App() {
   const fetchCurrentUser = async (userId: string) => {
     try {
       const { data, error } = await supabase.from('agents').select('*').eq('id', userId).single();
-      if (error) throw error;
+      
+      if (error || !data) {
+        // Fallback: build profile from JWT token metadata
+        console.warn('Could not fetch agent from DB, using JWT metadata:', error?.message);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const meta = user.user_metadata || {};
+          const fallbackAgent: Agent = {
+            id: user.id,
+            name: meta.name || user.email || 'Utilisateur',
+            email: user.email || '',
+            phone: meta.phone || '',
+            code: meta.code || 'N/A',
+            role: (meta.role as 'admin' | 'agent') || 'agent',
+          };
+          setCurrentUser(fallbackAgent);
+          if (fallbackAgent.role === 'admin') {
+            setActiveAgentId('admin');
+          } else {
+            setActiveAgentId(fallbackAgent.id);
+          }
+          return;
+        }
+        throw error || new Error('Profil introuvable');
+      }
+      
       const mapped = mapAgent(data);
       setCurrentUser(mapped);
       
@@ -891,14 +916,16 @@ export default function App() {
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-none bg-slate-700 group-hover:bg-orange-500 transition-colors flex items-center justify-center font-bold text-white uppercase text-sm shadow-md">
-              {activeAgentId === 'admin' ? 'FA' : agents.find(a => a.id === activeAgentId)?.name?.slice(0, 2) || 'AG'}
+              {activeAgentId === 'admin'
+                ? (currentUser?.name?.split(' ').map(n => n[0]).join('') || 'AD')
+                : agents.find(a => a.id === activeAgentId)?.name?.slice(0, 2) || 'AG'}
             </div>
             <div className="truncate flex-grow">
               <p className="text-sm font-semibold text-white truncate group-hover:text-orange-400 transition-colors">
-                {activeAgentId === 'admin' ? 'Franck Alliance' : agents.find(a => a.id === activeAgentId)?.name}
+                {activeAgentId === 'admin' ? (currentUser?.name || 'Administrateur') : agents.find(a => a.id === activeAgentId)?.name}
               </p>
               <p className="text-xs text-slate-500 font-mono">
-                {activeAgentId === 'admin' ? 'Administrateur Principal' : `Agent: ${agents.find(a => a.id === activeAgentId)?.code}`}
+                {activeAgentId === 'admin' ? `Code: ${currentUser?.code || 'N/A'}` : `Agent: ${agents.find(a => a.id === activeAgentId)?.code}`}
               </p>
             </div>
           </div>
@@ -2521,13 +2548,16 @@ export default function App() {
                 
                 {/* Profile Card Left */}
                 <div className="bg-white border border-slate-100 shadow-sm rounded-3xl p-6 space-y-6 flex flex-col items-center text-center">
+                  {/* Profile avatar: initials from currentUser if admin, else from the selected agent */}
                   <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-orange-500 to-amber-400 text-white flex items-center justify-center font-bold text-3xl uppercase shadow-lg shadow-orange-500/10">
-                    {activeAgentId === 'admin' ? 'FA' : agents.find(a => a.id === activeAgentId)?.name?.split(' ').map(n => n[0]).join('') || 'AG'}
+                    {activeAgentId === 'admin'
+                      ? (currentUser?.name?.split(' ').map(n => n[0]).join('') || 'AD')
+                      : agents.find(a => a.id === activeAgentId)?.name?.split(' ').map(n => n[0]).join('') || 'AG'}
                   </div>
 
                   <div>
                     <h3 className="text-lg font-black text-slate-900 tracking-tight">
-                      {activeAgentId === 'admin' ? 'Franck Alliance' : agents.find(a => a.id === activeAgentId)?.name}
+                      {activeAgentId === 'admin' ? (currentUser?.name || 'Administrateur') : agents.find(a => a.id === activeAgentId)?.name}
                     </h3>
                     <span className="inline-block mt-1 px-3 py-1 bg-orange-50 border border-orange-100 text-orange-600 rounded-full text-[10px] font-bold uppercase tracking-wider">
                       {activeAgentId === 'admin' ? 'Administrateur Principal' : 'Agent de Vente Agréé'}
@@ -2538,19 +2568,19 @@ export default function App() {
                     <div className="flex justify-between">
                       <span className="text-slate-400 font-medium">Adresse Email :</span>
                       <span className="text-slate-800 font-bold font-mono">
-                        {activeAgentId === 'admin' ? 'franck.alliance@alimobile.com' : agents.find(a => a.id === activeAgentId)?.email}
+                        {activeAgentId === 'admin' ? (currentUser?.email || '—') : agents.find(a => a.id === activeAgentId)?.email}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400 font-medium">Téléphone :</span>
                       <span className="text-slate-800 font-bold font-mono">
-                        {activeAgentId === 'admin' ? '+243 824 444 298' : agents.find(a => a.id === activeAgentId)?.phone}
+                        {activeAgentId === 'admin' ? (currentUser?.phone || '—') : agents.find(a => a.id === activeAgentId)?.phone}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400 font-medium">Code Identifiant :</span>
                       <span className="text-slate-800 font-bold font-mono">
-                        {activeAgentId === 'admin' ? 'DIR-243-01' : agents.find(a => a.id === activeAgentId)?.code}
+                        {activeAgentId === 'admin' ? (currentUser?.code || '—') : agents.find(a => a.id === activeAgentId)?.code}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -2834,9 +2864,9 @@ export default function App() {
                 const client = clients.find(c => c.id === viewingContractDoc.clientId);
                 const phone = smartphones.find(p => p.id === viewingContractDoc.smartphoneId);
                 
-                const agentName = viewingContractDoc.agentId === 'admin' 
-                  ? 'Franck Alliance' 
-                  : (agents.find(a => a.id === viewingContractDoc.agentId)?.name || 'Franck Alliance');
+                const agentName = viewingContractDoc.agentId === currentUser?.id
+                  ? (currentUser?.name || 'Administrateur')
+                  : (agents.find(a => a.id === viewingContractDoc.agentId)?.name || currentUser?.name || 'Agent Ali Mobile');
 
                 if (!client || !phone) return null;
 
