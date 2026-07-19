@@ -883,8 +883,8 @@ export default function App() {
                       setIsMobileSidebarOpen(false); // Auto close mobile sidebar
                     }}
                     className={`w-full flex items-center justify-between px-4 py-3 rounded-none text-sm transition-all duration-200 border ${isActive
-                        ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 font-bold'
-                        : 'text-slate-300 hover:bg-slate-800 border-transparent hover:text-white'
+                      ? 'bg-orange-500/10 text-orange-400 border-orange-500/20 font-bold'
+                      : 'text-slate-300 hover:bg-slate-800 border-transparent hover:text-white'
                       }`}
                   >
                     <div className="flex items-center space-x-3">
@@ -951,8 +951,8 @@ export default function App() {
           <div className="flex items-center space-x-2">
             {currentUser?.role === 'admin' ? (
               <div className="flex items-center bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-none text-xs">
-                <Briefcase className="w-3.5 h-3.5 text-slate-500 mr-2 shrink-0" />
-                {/**<select 
+                {/**<Briefcase className="w-3.5 h-3.5 text-slate-500 mr-2 shrink-0" />
+                <select 
                   value={activeAgentId} 
                   onChange={(e) => handleAgentChange(e.target.value)}
                   className="bg-transparent text-slate-800 font-semibold focus:outline-none cursor-pointer text-xs"
@@ -1302,8 +1302,8 @@ export default function App() {
                             <td className="py-3 font-mono text-right text-slate-500">{(pay.amountUsd * USD_TO_CDF).toLocaleString()} CDF</td>
                             <td className="py-3 text-center">
                               <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${isSuccess
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                  : 'bg-red-50 text-red-700 border border-red-100'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                : 'bg-red-50 text-red-700 border border-red-100'
                                 }`}>
                                 {pay.status}
                               </span>
@@ -1397,12 +1397,12 @@ export default function App() {
                             </td>
                             <td className="p-3 text-center">
                               <span className={`inline-block px-2.5 py-1 rounded-full text-[9px] font-bold ${contract.status === 'termine'
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                  : contract.status === 'bloque'
-                                    ? 'bg-red-50 text-red-700 border border-red-100 animate-pulse'
-                                    : contract.status === 'en_retard'
-                                      ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                                      : 'bg-orange-50 text-orange-700 border border-orange-100'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                : contract.status === 'bloque'
+                                  ? 'bg-red-50 text-red-700 border border-red-100 animate-pulse'
+                                  : contract.status === 'en_retard'
+                                    ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                                    : 'bg-orange-50 text-orange-700 border border-orange-100'
                                 }`}>
                                 {contract.status === 'termine' ? 'Smartphone Acquitté' :
                                   contract.status === 'bloque' ? '🔒 Knox Suspendu' :
@@ -1641,8 +1641,8 @@ export default function App() {
                             }
                           }}
                           className={`border-2 border-dashed rounded-2xl p-6 text-center transition flex flex-col items-center justify-center cursor-pointer ${isDraggingPhoto
-                              ? 'border-orange-500 bg-orange-50/50'
-                              : 'border-slate-200 bg-slate-50 hover:bg-slate-100/50'
+                            ? 'border-orange-500 bg-orange-50/50'
+                            : 'border-slate-200 bg-slate-50 hover:bg-slate-100/50'
                             }`}
                           onClick={() => document.getElementById('identity-photo-file-input')?.click()}
                         >
@@ -2425,8 +2425,8 @@ export default function App() {
                                   onClick={() => handleDeleteSmartphoneFromStock(phone.id)}
                                   disabled={!!activeContract}
                                   className={`p-2 rounded-lg transition-all ${activeContract
-                                      ? 'text-slate-300 cursor-not-allowed'
-                                      : 'text-red-500 hover:bg-red-50 hover:text-red-700 cursor-pointer'
+                                    ? 'text-slate-300 cursor-not-allowed'
+                                    : 'text-red-500 hover:bg-red-50 hover:text-red-700 cursor-pointer'
                                     }`}
                                   title={activeContract ? "Impossible de supprimer un appareil sous contrat actif" : "Supprimer du stock"}
                                 >
@@ -2826,8 +2826,8 @@ export default function App() {
                                 <td className="p-2.5 text-right font-extrabold text-slate-900">{p.amountUsd.toFixed(2)} $</td>
                                 <td className="p-2.5 text-center">
                                   <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${p.status === 'Terminé'
-                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                      : 'bg-red-50 text-red-700 border border-red-100'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                    : 'bg-red-50 text-red-700 border border-red-100'
                                     }`}>
                                     {p.status}
                                   </span>
