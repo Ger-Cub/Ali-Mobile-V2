@@ -242,7 +242,7 @@ BEGIN
     now(),
     now(),
     '{"provider":"email","providers":["email"]}',
-    jsonb_build_object('name', name, 'role', role, 'code', code),
+    jsonb_build_object('name', name, 'role', role, 'code', code, 'phone', phone),
     now(),
     now(),
     '',
@@ -266,7 +266,12 @@ BEGIN
     phone,
     code,
     role
-  );
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    phone = EXCLUDED.phone,
+    code = EXCLUDED.code,
+    role = EXCLUDED.role;
 
   RETURN new_user_id;
 END;
