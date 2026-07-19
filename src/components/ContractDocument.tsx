@@ -27,6 +27,114 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
 
   return (
     <div id={`contract-doc-${contract.contractNumber}`} className="print-page bg-white text-neutral-900 p-8 md:p-12 max-w-[800px] mx-auto border border-neutral-200 shadow-xl font-sans rounded-sm">
+      <style>{`
+        .print-page {
+          background-color: #ffffff !important;
+          color: #171717 !important;
+          font-family: system-ui, -apple-system, sans-serif !important;
+        }
+        .print-page * {
+          border-color: #d4d4d4 !important;
+        }
+        .print-page .text-neutral-950 {
+          color: #0a0a0a !important;
+        }
+        .print-page .text-neutral-900 {
+          color: #171717 !important;
+        }
+        .print-page .text-neutral-800 {
+          color: #262626 !important;
+        }
+        .print-page .text-neutral-700 {
+          color: #404040 !important;
+        }
+        .print-page .text-neutral-600 {
+          color: #525252 !important;
+        }
+        .print-page .text-neutral-500 {
+          color: #737373 !important;
+        }
+        .print-page .text-neutral-400 {
+          color: #a3a3a3 !important;
+        }
+        .print-page .text-black {
+          color: #000000 !important;
+        }
+        .print-page .text-red-600 {
+          color: #dc2626 !important;
+        }
+        .print-page .text-red-700 {
+          color: #b91c1c !important;
+        }
+        .print-page .text-amber-500 {
+          color: #f59e0b !important;
+        }
+        .print-page .text-indigo-900 {
+          color: #1e1b4b !important;
+        }
+        .print-page .text-indigo-800 {
+          color: #3730a3 !important;
+        }
+        .print-page .text-blue-800 {
+          color: #1e40af !important;
+        }
+        .print-page .text-slate-500 {
+          color: #64748b !important;
+        }
+        .print-page .bg-neutral-100 {
+          background-color: #f5f5f5 !important;
+        }
+        .print-page .bg-neutral-50 {
+          background-color: #fafafa !important;
+        }
+        .print-page .bg-red-50 {
+          background-color: #fef2f2 !important;
+        }
+        .print-page .border-neutral-100 {
+          border-color: #f5f5f5 !important;
+        }
+        .print-page .border-neutral-200 {
+          border-color: #e5e5e5 !important;
+        }
+        .print-page .border-neutral-300 {
+          border-color: #d4d4d4 !important;
+        }
+        .print-page .border-neutral-150 {
+          border-color: #ededed !important;
+        }
+        .print-page .border-red-600 {
+          border-color: #dc2626 !important;
+        }
+        .print-page .border-red-150 {
+          border-color: #fca5a5 !important;
+        }
+        .print-page .border-indigo-300 {
+          border-color: #a5b4fc !important;
+        }
+        .print-page .decoration-indigo-500 {
+          text-decoration-color: #6366f1 !important;
+        }
+        .print-page .decoration-neutral-400 {
+          text-decoration-color: #a3a3a3 !important;
+        }
+        .custom-print-checkbox {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 14px;
+          height: 14px;
+          border: 1.5px solid #171717 !important;
+          background-color: #ffffff !important;
+          color: #000000 !important;
+          font-size: 10px;
+          font-weight: 900;
+          line-height: 1;
+          text-align: center;
+          border-radius: 2px;
+          vertical-align: middle;
+          margin-right: 4px;
+        }
+      `}</style>
       {/* Header */}
       <div className="text-center mb-6 pb-6 border-b border-neutral-300">
         <h1 className="text-xl md:text-2xl font-bold font-display uppercase tracking-tight text-neutral-900">
@@ -96,15 +204,21 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
                 <span className="text-neutral-500 text-xs block">Pièce d'identité fournie</span>
                 <div className="flex items-center space-x-3 mt-1">
                   <label className="flex items-center space-x-1.5 text-xs text-neutral-800">
-                    <input type="checkbox" checked={client.identityDocType === 'Carte d\'électeur'} readOnly className="rounded border-neutral-300 text-black focus:ring-black h-3.5 w-3.5" />
+                    <span className="custom-print-checkbox">
+                      {client.identityDocType === 'Carte d\'électeur' ? '✓' : ''}
+                    </span>
                     <span>Carte d'électeur</span>
                   </label>
                   <label className="flex items-center space-x-1.5 text-xs text-neutral-800">
-                    <input type="checkbox" checked={client.identityDocType === 'Passeport'} readOnly className="rounded border-neutral-300 text-black focus:ring-black h-3.5 w-3.5" />
+                    <span className="custom-print-checkbox">
+                      {client.identityDocType === 'Passeport' ? '✓' : ''}
+                    </span>
                     <span>Passeport</span>
                   </label>
                   <label className="flex items-center space-x-1.5 text-xs text-neutral-800">
-                    <input type="checkbox" checked={client.identityDocType === 'Permis de conduire'} readOnly className="rounded border-neutral-300 text-black focus:ring-black h-3.5 w-3.5" />
+                    <span className="custom-print-checkbox">
+                      {client.identityDocType === 'Permis de conduire' ? '✓' : ''}
+                    </span>
                     <span>Permis</span>
                   </label>
                 </div>
@@ -150,7 +264,9 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
               {/* Option A */}
               <div className={`p-3 rounded border ${contract.planType === 'hebdo' ? 'border-black bg-white shadow-sm' : 'border-neutral-200 opacity-60'}`}>
                 <label className="flex items-center space-x-2 font-bold text-neutral-950 text-xs uppercase mb-2">
-                  <input type="checkbox" checked={contract.planType === 'hebdo'} readOnly className="rounded border-neutral-300 text-black h-4 w-4" />
+                  <span className="custom-print-checkbox">
+                    {contract.planType === 'hebdo' ? '✓' : ''}
+                  </span>
                   <span>OPTION A : FORMULE HEBDOMADAIRE</span>
                 </label>
                 <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 pl-6 text-xs text-neutral-800 list-disc">
@@ -164,7 +280,9 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
               {/* Option B */}
               <div className={`p-3 rounded border ${contract.planType === 'mensuel' ? 'border-black bg-white shadow-sm' : 'border-neutral-200 opacity-60'}`}>
                 <label className="flex items-center space-x-2 font-bold text-neutral-950 text-xs uppercase mb-2">
-                  <input type="checkbox" checked={contract.planType === 'mensuel'} readOnly className="rounded border-neutral-300 text-black h-4 w-4" />
+                  <span className="custom-print-checkbox">
+                    {contract.planType === 'mensuel' ? '✓' : ''}
+                  </span>
                   <span>OPTION B : FORMULE MENSUELLE</span>
                 </label>
                 <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 pl-6 text-xs text-neutral-800 list-disc">
