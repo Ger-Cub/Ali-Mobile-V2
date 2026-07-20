@@ -1354,7 +1354,7 @@ export default function App() {
                         <th className="p-3">Smartphone acquis</th>
                         <th className="p-3 text-center">Plan de paiement</th>
                         <th className="p-3 text-right">Traite</th>
-                        <th className="p-3 text-right">Acompte Initial (50%)</th>
+                        <th className="p-3 text-right">Acompte Initial</th>
                         <th className="p-3 text-center">État Knox Lock</th>
                         <th className="p-3 text-right">Actions</th>
                       </tr>
