@@ -35,7 +35,9 @@ import {
   Image as ImageIcon,
   Trash2,
   LogOut,
-  Loader2
+  Loader2,
+  ArrowLeftRight,
+  AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -46,25 +48,31 @@ import {
   DelayRecord,
   Agent,
   USD_TO_CDF,
-  PaymentPlanType
+  PaymentPlanType,
+  UtilityTransaction
 } from './data/db';
 import { ContractDocument } from './components/ContractDocument';
 import { KnoxSimulator } from './components/KnoxSimulator';
+import { TransactionsTab } from './components/TransactionsTab';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import * as XLSX from 'xlsx';
 import { supabase } from './lib/supabase';
 import { supabaseDB, mapAgent } from './lib/supabaseDB';
 import { LoginPage } from './components/LoginPage';
 
 export default function App() {
   // Navigation State
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'contracts' | 'new_contract' | 'new_payment' | 'knox' | 'agents' | 'settings' | 'profile' | 'knox_stock'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'contracts' | 'new_contract' | 'new_payment' | 'knox' | 'agents' | 'settings' | 'profile' | 'knox_stock' | 'transactions'>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Session and Auth State
   const [session, setSession] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<Agent | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
+
+  // Inactivity Session Timeout (30 minutes)
+  const [showInactivityWarning, setShowInactivityWarning] = useState(false);
 
   // Data State
   const [clients, setClients] = useState<Client[]>([]);
@@ -73,6 +81,7 @@ export default function App() {
   const [delays, setDelays] = useState<DelayRecord[]>([]);
   const [smartphones, setSmartphones] = useState<Smartphone[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [transactions, setTransactions] = useState<UtilityTransaction[]>([]);
   const [activeAgentId, setActiveAgentId] = useState<string>('admin');
 
   // Interactive UI State
@@ -85,7 +94,8 @@ export default function App() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // Profile / Subordinate agent Creation form state
-  const [newUserRole, setNewUserRole] = useState<'admin' | 'agent'>('agent');
+  const [newUserRole, setNewUserRole] = useState<'admin' | 'agent' | 'operator'>('agent');
+  const [newUserCity, setNewUserCity] = useState('Goma');
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPhone, setNewUserPhone] = useState('');
@@ -155,6 +165,50 @@ export default function App() {
     };
   }, []);
 
+  // Inactivity Session Timeout (30 minutes)
+  useEffect(() => {
+    if (!session) return;
+
+    const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+    const WARNING_BEFORE_MS = 2 * 60 * 1000; // Warning 2 min before expiration
+
+    let timeoutId: any;
+    let warningId: any;
+
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      clearTimeout(warningId);
+      setShowInactivityWarning(false);
+
+      warningId = setTimeout(() => {
+        setShowInactivityWarning(true);
+      }, INACTIVITY_TIMEOUT_MS - WARNING_BEFORE_MS);
+
+      timeoutId = setTimeout(async () => {
+        setShowInactivityWarning(false);
+        try {
+          await supabase.auth.signOut();
+        } catch (e) {
+          console.error("Signout error:", e);
+        }
+        setSession(null);
+        setCurrentUser(null);
+        showToast("Votre session a expiré après 30 minutes d'inactivité pour des raisons de sécurité.", "error");
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach(evt => window.addEventListener(evt, resetTimer, { passive: true }));
+
+    resetTimer();
+
+    return () => {
+      clearTimeout(timeoutId);
+      clearTimeout(warningId);
+      activityEvents.forEach(evt => window.removeEventListener(evt, resetTimer));
+    };
+  }, [session]);
+
   const fetchCurrentUser = async (userId: string) => {
     try {
       const { data, error } = await supabase.from('agents').select('*').eq('id', userId).single();
@@ -171,10 +225,11 @@ export default function App() {
             email: user.email || '',
             phone: meta.phone || '',
             code: meta.code || 'N/A',
-            role: (meta.role as 'admin' | 'agent') || 'agent',
+            role: (meta.role as 'admin' | 'agent' | 'operator') || 'agent',
+            city: meta.city || 'Goma',
           };
           setCurrentUser(fallbackAgent);
-          if (fallbackAgent.role === 'admin') {
+          if (fallbackAgent.role === 'admin' || fallbackAgent.role === 'operator') {
             setActiveAgentId('admin');
           } else {
             setActiveAgentId(fallbackAgent.id);
@@ -187,8 +242,8 @@ export default function App() {
       const mapped = mapAgent(data);
       setCurrentUser(mapped);
 
-      // Default views
-      if (mapped.role === 'admin') {
+      // Default views: Admin and Operator see all records
+      if (mapped.role === 'admin' || mapped.role === 'operator') {
         setActiveAgentId('admin');
       } else {
         setActiveAgentId(mapped.id);
@@ -222,13 +277,14 @@ export default function App() {
 
   const refreshData = async () => {
     try {
-      const [a, s, c, co, p, d] = await Promise.all([
+      const [a, s, c, co, p, d, tx] = await Promise.all([
         supabaseDB.getAgents(),
         supabaseDB.getSmartphones(),
         supabaseDB.getClients(),
         supabaseDB.getContracts(),
         supabaseDB.getPayments(),
-        supabaseDB.getDelayRecords()
+        supabaseDB.getDelayRecords(),
+        supabaseDB.getTransactions().catch(() => [] as UtilityTransaction[])
       ]);
       setAgents(a);
       setSmartphones(s);
@@ -236,8 +292,72 @@ export default function App() {
       setContracts(co);
       setPayments(p);
       setDelays(d);
+      setTransactions(tx || []);
     } catch (err) {
       console.error('Error refreshing data from Supabase:', err);
+    }
+  };
+
+  const handleAddTransaction = async (txData: Omit<UtilityTransaction, 'id' | 'createdAt'>) => {
+    await supabaseDB.addTransaction(txData);
+    await refreshData();
+  };
+
+  // Export Contracts to Excel (.xlsx)
+  const handleExportContractsExcel = () => {
+    if (contracts.length === 0) {
+      showToast("Aucun contrat à exporter.", "error");
+      return;
+    }
+
+    try {
+      const dataToExport = filteredContracts.map((c, idx) => {
+        const client = clients.find(cl => cl.id === c.clientId);
+        const phone = smartphones.find(sp => sp.id === c.smartphoneId);
+        const agent = agents.find(a => a.id === c.agentId);
+
+        const contractPayments = payments.filter(p => p.contractNumber === c.contractNumber && p.status === 'Terminé');
+        const totalPaid = contractPayments.reduce((acc, curr) => acc + curr.amountUsd, 0);
+        const totalCost = c.initialDepositUsd + (c.installmentAmountUsd * c.totalInstallments);
+        const remaining = Math.max(0, totalCost - totalPaid);
+
+        return {
+          "N°": idx + 1,
+          "N° Contrat": c.contractNumber,
+          "Date Souscription": c.subscriptionDate,
+          "Nom Client": client ? `${client.lastName} ${client.middleName || ''} ${client.firstName}`.trim() : 'N/A',
+          "Téléphone WhatsApp": client?.phoneWhatsApp || 'N/A',
+          "Téléphone Urgence": client?.phoneUrgency || 'N/A',
+          "Type Pièce": client?.identityDocType || 'N/A',
+          "N° Pièce": client?.identityDocNum || 'N/A',
+          "Adresse Client": client ? `${client.addressNum} Av. ${client.addressAvenue}, Q. ${client.neighborhood}, ${client.cityCommune}` : 'N/A',
+          "Smartphone": phone ? `${phone.brand} ${phone.model}` : 'N/A',
+          "IMEI": phone?.imei || 'N/A',
+          "Valeur Téléphone ($)": phone?.valueUsd || 0,
+          "Plan": c.planType === 'hebdo' ? 'Hebdomadaire (8x)' : 'Mensuel (2x)',
+          "Acompte Initial ($)": c.initialDepositUsd,
+          "Montant Échéance ($)": c.installmentAmountUsd,
+          "Nb Échéances": c.totalInstallments,
+          "Jour de Paiement": c.paymentDay,
+          "Total Payé ($)": totalPaid,
+          "Reste à Payer ($)": remaining,
+          "Statut Contrat": c.status === 'termine' ? 'Acquitté' : c.status === 'bloque' ? 'Bloqué Knox' : c.status === 'en_retard' ? 'En retard' : 'En cours',
+          "Agent Responsable": agent?.name || 'N/A',
+          "Code Agent": agent?.code || 'N/A',
+          "Ville Agent": agent?.city || 'Goma',
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Contrats Ali Mobile');
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(workbook, `AliMobile_Contrats_${dateStr}.xlsx`);
+      showToast("Fichier Excel des contrats exporté avec succès !");
+    } catch (err: any) {
+      console.error('Export error:', err);
+      showToast("Erreur lors de l'exportation des contrats", "error");
     }
   };
 
@@ -259,45 +379,50 @@ export default function App() {
     showToast("La réinitialisation globale de la base de données est désactivée en production.", "error");
   };
 
-  // Auto-generate code for new subordinate/agent
+  // Auto-generate code for new subordinate/agent/operator
   useEffect(() => {
     const nextNum = agents.length + 1;
     if (newUserRole === 'admin') {
       setNewUserCode(`AD-243-0${nextNum}`);
+    } else if (newUserRole === 'operator') {
+      setNewUserCode(`OP-243-0${nextNum}`);
     } else {
       setNewUserCode(`AG-243-0${nextNum}`);
     }
   }, [newUserRole, agents]);
 
-  // Handle creation of agent/sub-admin
+  // Handle creation of agent/operator/sub-admin
   const handleCreateSubordinate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserName || !newUserEmail || !newUserPhone || !newUserCode || !newUserPassword) {
+    if (!newUserName || !newUserEmail || !newUserPhone || !newUserCode || !newUserPassword || !newUserCity) {
       showToast("Veuillez remplir tous les champs.", "error");
       return;
     }
 
     try {
-      showToast("Création du compte agent en cours...");
+      showToast("Création du compte en cours...");
       await supabaseDB.createAgent({
         name: newUserName,
         email: newUserEmail,
         phone: newUserPhone,
         code: newUserCode,
-        role: 'agent',
+        role: newUserRole,
+        city: newUserCity,
       }, newUserPassword);
 
-      showToast(`${newUserRole === 'admin' ? 'Administrateur Adjoint' : 'Agent de Vente'} créé avec succès !`);
+      const roleLabel = newUserRole === 'admin' ? 'Administrateur Adjoint' : newUserRole === 'operator' ? 'Opérateur Utilités' : 'Agent de Vente';
+      showToast(`${roleLabel} créé avec succès !`);
 
       // Reset form fields
       setNewUserName('');
       setNewUserEmail('');
       setNewUserPhone('');
       setNewUserPassword('');
+      setNewUserCity('Goma');
       refreshData();
     } catch (err: any) {
       console.error(err);
-      showToast(err.message || "Erreur lors de la création de l'agent", "error");
+      showToast(err.message || "Erreur lors de la création du compte", "error");
     }
   };
 
@@ -644,10 +769,12 @@ export default function App() {
     }
   };
 
-  // Filter lists based on role (Agent sees only his clients/contracts/payments, Admin sees all)
+  // Filter lists based on role (Admin and Operator see all records, Agent sees only his own)
+  const canViewAll = activeAgentId === 'admin' || currentUser?.role === 'admin' || currentUser?.role === 'operator';
+
   const filteredClients = clients.filter(c => {
     const matchesSearch = `${c.lastName} ${c.firstName} ${c.phoneWhatsApp}`.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesAgent = activeAgentId === 'admin' ? true : c.agentId === activeAgentId;
+    const matchesAgent = canViewAll ? true : c.agentId === activeAgentId;
     return matchesSearch && matchesAgent;
   });
 
@@ -655,7 +782,7 @@ export default function App() {
     const client = clients.find(cl => cl.id === c.clientId);
     const clientName = client ? `${client.lastName} ${client.firstName}` : '';
     const matchesSearch = `${c.contractNumber} ${clientName}`.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesAgent = activeAgentId === 'admin' ? true : c.agentId === activeAgentId;
+    const matchesAgent = canViewAll ? true : c.agentId === activeAgentId;
     return matchesSearch && matchesAgent;
   });
 
@@ -663,7 +790,7 @@ export default function App() {
     const client = clients.find(cl => cl.id === p.clientId);
     const clientName = client ? `${client.lastName} ${client.firstName}` : '';
     const matchesSearch = `${p.contractNumber} ${p.transactionRef} ${clientName}`.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesAgent = activeAgentId === 'admin' ? true : p.agentId === activeAgentId;
+    const matchesAgent = canViewAll ? true : p.agentId === activeAgentId;
     return matchesSearch && matchesAgent;
   });
 
@@ -672,14 +799,14 @@ export default function App() {
     const clientName = client ? `${client.lastName} ${client.firstName}` : '';
     const matchesSearch = `${d.contractNumber} ${clientName}`.toLowerCase().includes(searchTerm.toLowerCase());
     const contract = contracts.find(co => co.contractNumber === d.contractNumber);
-    const matchesAgent = activeAgentId === 'admin' ? true : (contract?.agentId === activeAgentId);
+    const matchesAgent = canViewAll ? true : (contract?.agentId === activeAgentId);
     return matchesSearch && matchesAgent && d.status === 'Actif';
   });
 
   // Calculate Dashboard Metrics
-  const activeContracts = contracts.filter(c => activeAgentId === 'admin' ? true : c.agentId === activeAgentId);
+  const activeContracts = contracts.filter(c => canViewAll ? true : c.agentId === activeAgentId);
   const totalEncaisse = payments
-    .filter(p => p.status === 'Terminé' && (activeAgentId === 'admin' ? true : p.agentId === activeAgentId))
+    .filter(p => p.status === 'Terminé' && (canViewAll ? true : p.agentId === activeAgentId))
     .reduce((acc, curr) => acc + curr.amountUsd, 0);
 
   const totalClientsCount = filteredClients.length;
@@ -863,13 +990,20 @@ export default function App() {
           <ul className="space-y-2">
             {[
               { id: 'dashboard', label: 'Tableau de bord', icon: TrendingUp },
-              { id: 'contracts', label: 'Voir ses clients', icon: Users },
-              { id: 'new_contract', label: 'Créer un contrat', icon: PlusCircle },
-              { id: 'new_payment', label: 'Ajouter un paiement', icon: Coins },
+              { id: 'contracts', label: currentUser?.role === 'operator' ? 'Contrats (Lecture)' : 'Voir ses clients', icon: Users },
+              ...(currentUser?.role !== 'operator' ? [
+                { id: 'new_contract', label: 'Créer un contrat', icon: PlusCircle },
+                { id: 'new_payment', label: 'Ajouter un paiement', icon: Coins },
+              ] : []),
+              ...(currentUser?.role === 'operator' || currentUser?.role === 'admin' ? [
+                { id: 'transactions', label: 'Transactions Utilités', icon: ArrowLeftRight, badge: transactions.length > 0 ? transactions.length : undefined },
+              ] : []),
               { id: 'knox', label: 'Voir ses retards', icon: ShieldAlert, badge: filteredDelays.length > 0 ? filteredDelays.length : undefined },
-              { id: 'agents', label: 'Statistiques Agents', icon: Activity },
-              { id: 'knox_stock', label: 'Stock Samsung Knox', icon: Database },
-              { id: 'settings', label: 'Paramètres', icon: Settings },
+              ...(currentUser?.role === 'admin' ? [
+                { id: 'agents', label: 'Statistiques Agents', icon: Activity },
+                { id: 'knox_stock', label: 'Stock Samsung Knox', icon: Database },
+                { id: 'settings', label: 'Paramètres', icon: Settings },
+              ] : []),
             ].map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -983,21 +1117,49 @@ export default function App() {
             >
               <LogOut className="w-4.5 h-4.5" />
             </button>
-            <button
-              onClick={() => {
-                setActiveTab('new_contract');
-                setSelectedClientForDetails(null);
-                setSelectedContract(null);
-              }}
-              className="hidden sm:inline-block bg-orange-500 text-white px-5 py-2 rounded-none font-semibold text-xs shadow-md shadow-orange-500/20 hover:bg-orange-600 transition"
-            >
-              Créer un contrat
-            </button>
+            {currentUser?.role !== 'operator' ? (
+              <button
+                onClick={() => {
+                  setActiveTab('new_contract');
+                  setSelectedClientForDetails(null);
+                  setSelectedContract(null);
+                }}
+                className="hidden sm:inline-block bg-orange-500 text-white px-5 py-2 rounded-none font-semibold text-xs shadow-md shadow-orange-500/20 hover:bg-orange-600 transition cursor-pointer"
+              >
+                Créer un contrat
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setActiveTab('transactions');
+                  setSelectedClientForDetails(null);
+                  setSelectedContract(null);
+                }}
+                className="hidden sm:inline-block bg-orange-500 text-white px-5 py-2 rounded-none font-semibold text-xs shadow-md shadow-orange-500/20 hover:bg-orange-600 transition cursor-pointer"
+              >
+                Nouvelle Transaction
+              </button>
+            )}
           </div>
         </header>
 
         {/* Content Panel */}
         <main className="flex-grow flex flex-col overflow-y-auto bg-slate-50 p-4 md:p-8 rounded-none">
+
+          {/* Inactivity Warning Banner (2 min before 30 min expiration) */}
+          {showInactivityWarning && (
+            <div className="mb-6 bg-amber-400 border border-amber-500 text-slate-950 px-4 py-3 font-bold text-xs flex items-center justify-between shadow-lg animate-pulse">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-5 h-5 text-slate-950 shrink-0" />
+                <span>
+                  Attention : Votre session expirera dans moins de 2 minutes pour inactivité. Cliquez ou effectuez une action pour rester connecté.
+                </span>
+              </div>
+              <span className="text-[10px] uppercase font-mono px-2 py-0.5 bg-slate-950 text-amber-300 font-black">
+                Expiration 30 min
+              </span>
+            </div>
+          )}
 
           {/* Dashboard Tab */}
           {activeTab === 'dashboard' && (
@@ -1328,7 +1490,7 @@ export default function App() {
                   </h1>
                   <p className="text-xs text-slate-500 mt-1">Liste complète des acheteurs, smartphones, et états de paiement.</p>
                 </div>
-                <div className="mt-2 sm:mt-0 flex space-x-2">
+                <div className="mt-2 sm:mt-0 flex items-center space-x-2">
                   <div className="relative">
                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
                     <input
@@ -1339,6 +1501,16 @@ export default function App() {
                       className="bg-white text-xs pl-8 pr-3 py-2 rounded-xl border border-slate-200 text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 w-64 shadow-sm"
                     />
                   </div>
+                  {currentUser?.role !== 'operator' && (
+                    <button
+                      onClick={handleExportContractsExcel}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+                      title="Exporter les contrats en format Excel .xlsx"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Exporter .XLSX</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1410,35 +1582,43 @@ export default function App() {
                               </span>
                             </td>
                             <td className="p-3 text-right space-x-1.5 whitespace-nowrap">
-                              <button
-                                onClick={() => setViewingContractDoc(contract)}
-                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 p-2 rounded-xl transition inline-flex items-center"
-                                title="Voir le contrat imprimable"
-                              >
-                                <Printer className="w-3.5 h-3.5" />
-                              </button>
-                              {contract.status === 'bloque' && (
-                                <button
-                                  onClick={() => setKnoxSimulatingContract(contract)}
-                                  className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 p-2 rounded-xl transition inline-flex items-center"
-                                  title="Ouvrir le simulateur de blocage"
-                                >
-                                  <ShieldAlert className="w-3.5 h-3.5" />
-                                </button>
+                              {currentUser?.role === 'operator' ? (
+                                <span className="text-[10px] text-slate-400 italic font-mono px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg">
+                                  Lecture seule
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => setViewingContractDoc(contract)}
+                                    className="bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 p-2 rounded-xl transition inline-flex items-center"
+                                    title="Voir le contrat imprimable"
+                                  >
+                                    <Printer className="w-3.5 h-3.5" />
+                                  </button>
+                                  {contract.status === 'bloque' && (
+                                    <button
+                                      onClick={() => setKnoxSimulatingContract(contract)}
+                                      className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 p-2 rounded-xl transition inline-flex items-center"
+                                      title="Ouvrir le simulateur de blocage"
+                                    >
+                                      <ShieldAlert className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      setPaymentForm(prev => ({
+                                        ...prev,
+                                        contractNumber: contract.contractNumber,
+                                        amountUsd: contract.installmentAmountUsd.toString()
+                                      }));
+                                      setActiveTab('new_payment');
+                                    }}
+                                    className="bg-orange-500 text-white hover:bg-orange-600 py-2 px-3 rounded-xl text-xs font-bold transition shadow-sm shadow-orange-500/20"
+                                  >
+                                    Payer
+                                  </button>
+                                </>
                               )}
-                              <button
-                                onClick={() => {
-                                  setPaymentForm(prev => ({
-                                    ...prev,
-                                    contractNumber: contract.contractNumber,
-                                    amountUsd: contract.installmentAmountUsd.toString()
-                                  }));
-                                  setActiveTab('new_payment');
-                                }}
-                                className="bg-orange-500 text-white hover:bg-orange-600 py-2 px-3 rounded-xl text-xs font-bold transition shadow-sm shadow-orange-500/20"
-                              >
-                                Payer
-                              </button>
                             </td>
                           </tr>
                         );
@@ -2582,7 +2762,9 @@ export default function App() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400 font-medium">Ville d'affectation :</span>
-                      <span className="text-slate-800 font-bold">Goma, RDC</span>
+                      <span className="text-slate-800 font-bold">
+                        {activeAgentId === 'admin' ? (currentUser?.city || 'Goma') : (agents.find(a => a.id === activeAgentId)?.city || 'Goma')}, RDC
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -2636,13 +2818,13 @@ export default function App() {
                       <div className="border-b border-slate-100 pb-2">
                         <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider font-display flex items-center">
                           <UserPlus className="w-4 h-4 mr-1.5 text-orange-500" />
-                          <span>Créer un Compte Subordonné (Admin Adjoint ou Agent)</span>
+                          <span>Créer un Compte Subordonné (Admin, Agent ou Opérateur)</span>
                         </h4>
                         <p className="text-[10px] text-slate-400 mt-0.5">Enregistrer un nouvel utilisateur habilité à utiliser l'application Ali Mobile.</p>
                       </div>
 
                       <form onSubmit={handleCreateSubordinate} className="space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div>
                             <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Rôle de l'utilisateur</label>
                             <select
@@ -2651,8 +2833,21 @@ export default function App() {
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 font-bold cursor-pointer"
                             >
                               <option value="agent">Agent de Vente Agréé</option>
+                              <option value="operator">Opérateur Utilités</option>
                               <option value="admin">Administrateur Subordonné</option>
                             </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Ville d'affectation</label>
+                            <input
+                              type="text"
+                              required
+                              value={newUserCity}
+                              onChange={(e) => setNewUserCity(e.target.value)}
+                              placeholder="Ex: Goma, Bukavu, Kinshasa..."
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
+                            />
                           </div>
 
                           <div>
@@ -2743,6 +2938,21 @@ export default function App() {
 
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Utility Transactions Tab (Airtel & Vodacom) */}
+          {activeTab === 'transactions' && (
+            <div className="no-print max-w-7xl mx-auto w-full">
+              <TransactionsTab
+                transactions={transactions}
+                agents={agents}
+                currentUser={currentUser}
+                canCreate={currentUser?.role === 'admin' || currentUser?.role === 'operator'}
+                onAddTransaction={handleAddTransaction}
+                onRefresh={refreshData}
+                showToast={showToast}
+              />
             </div>
           )}
 
@@ -2860,9 +3070,11 @@ export default function App() {
                 const client = clients.find(c => c.id === viewingContractDoc.clientId);
                 const phone = smartphones.find(p => p.id === viewingContractDoc.smartphoneId);
 
+                const contractAgent = agents.find(a => a.id === viewingContractDoc.agentId);
                 const agentName = viewingContractDoc.agentId === currentUser?.id
                   ? (currentUser?.name || 'Administrateur')
-                  : (agents.find(a => a.id === viewingContractDoc.agentId)?.name || currentUser?.name || 'Agent Ali Mobile');
+                  : (contractAgent?.name || currentUser?.name || 'Agent Ali Mobile');
+                const agentCity = contractAgent?.city || (viewingContractDoc.agentId === currentUser?.id ? currentUser?.city : undefined) || 'Goma';
 
                 if (!client || !phone) return null;
 
@@ -2905,6 +3117,7 @@ export default function App() {
                         client={client}
                         smartphone={phone}
                         agentName={agentName}
+                        agentCity={agentCity}
                       />
                     </div>
                   </div>
@@ -2920,8 +3133,12 @@ export default function App() {
           {[
             { id: 'dashboard', label: 'Bord', icon: TrendingUp },
             { id: 'contracts', label: 'Contrats', icon: Users },
-            { id: 'new_contract', label: 'Nouveau', icon: PlusCircle },
-            { id: 'new_payment', label: 'Paiement', icon: Coins },
+            ...(currentUser?.role === 'operator' ? [
+              { id: 'transactions', label: 'Trans.', icon: ArrowLeftRight },
+            ] : [
+              { id: 'new_contract', label: 'Nouveau', icon: PlusCircle },
+              { id: 'new_payment', label: 'Paiement', icon: Coins },
+            ]),
             { id: 'knox', label: 'Knox', icon: ShieldAlert, badge: filteredDelays.length > 0 ? filteredDelays.length : undefined },
           ].map((item) => {
             const Icon = item.icon;

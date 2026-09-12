@@ -9,6 +9,8 @@ export interface Agent {
   code: string; // e.g. AG-243-01
   avatar?: string;
   phone: string;
+  role?: 'admin' | 'agent' | 'operator';
+  city?: string;
 }
 
 export interface Smartphone {
@@ -77,6 +79,22 @@ export interface DelayRecord {
   daysOverdue: number;
   status: 'Actif' | 'Résolu';
 }
+
+export interface UtilityTransaction {
+  id: string;
+  clientName: string;
+  transactionType: 'dépôt' | 'retrait';
+  phoneNumber: string;
+  amount: number;
+  operator: 'Airtel' | 'Vodacom';
+  operatorTransactionNumber: string;
+  referenceNumber: string;
+  reason: string;
+  operatorId: string;
+  createdAt: string;
+}
+
+export type Transaction = UtilityTransaction;
 
 // Default Seed Data
 export const SEED_AGENTS: Agent[] = [
