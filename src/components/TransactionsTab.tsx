@@ -450,7 +450,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                           {agent ? agent.name : 'Opérateur'}
                         </div>
                         <div className="text-[10px] text-slate-500">
-                          {agent?.city ? `Ville: ${agent.city}` : 'Goma'}
+                          {agent?.city ? `Ville: ${agent.city}` : 'Bukavu'}
                         </div>
                       </td>
                     </tr>

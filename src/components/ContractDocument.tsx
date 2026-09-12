@@ -14,7 +14,7 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
   client,
   smartphone,
   agentName,
-  agentCity = 'Goma'
+  agentCity = 'Bukavu'
 }) => {
   const formattedDate = new Date(contract.subscriptionDate).toLocaleDateString('fr-FR', {
     day: '2-digit',
@@ -390,7 +390,7 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
           </p>
           
           <p className="font-mono text-neutral-600 italic">
-            Fait à <span className="font-bold text-black underline">{agentCity || 'Goma'}</span>, le <span className="font-bold text-black underline">{day} / {month} / {year}</span> en deux exemplaires originaux.
+            Fait à <span className="font-bold text-black underline">{agentCity || 'Bukavu'}</span>, le <span className="font-bold text-black underline">{day} / {month} / {year}</span> en deux exemplaires originaux.
           </p>
 
           <div className="bg-neutral-50 p-3 rounded border border-neutral-200 mt-2">
@@ -425,7 +425,7 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
                 {/* Round Stamp */}
                 <div className="w-24 h-24 rounded-full border-4 border-double border-red-600 flex flex-col justify-center items-center text-red-600 font-bold text-[8px] text-center rotate-[12deg] opacity-70 p-1 select-none">
                   <div className="border-b border-red-600 w-full pb-0.5">ALI MOBILE</div>
-                  <div className="text-[6px] py-0.5">{(agentCity || 'Goma').toUpperCase()} — RDC</div>
+                  <div className="text-[6px] py-0.5">{(agentCity || 'Bukavu').toUpperCase()} — RDC</div>
                   <div className="border-t border-red-600 w-full pt-0.5">AGRÉÉ</div>
                 </div>
                 {/* Agent signature */}

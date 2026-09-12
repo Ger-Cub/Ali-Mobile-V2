@@ -8,7 +8,7 @@
 
 -- 1. AJOUT DU CHAMP VILLE POUR LES AGENTS
 -- Permet de stocker la ville de l'agent (utilisée pour le lieu de signature du contrat)
-ALTER TABLE public.agents ADD COLUMN IF NOT EXISTS city TEXT DEFAULT 'Goma';
+ALTER TABLE public.agents ADD COLUMN IF NOT EXISTS city TEXT DEFAULT 'Bukavu';
 
 -- 2. AJOUT DU RÔLE 'operator' EN PLUS DE 'admin' ET 'agent'
 ALTER TABLE public.agents DROP CONSTRAINT IF EXISTS agents_role_check;
@@ -24,7 +24,7 @@ CREATE OR REPLACE FUNCTION public.create_agent_user(
   phone TEXT,
   code TEXT,
   role TEXT,
-  city TEXT DEFAULT 'Goma'
+  city TEXT DEFAULT 'Bukavu'
 ) RETURNS UUID AS $$
 DECLARE
   new_user_id UUID;
@@ -153,3 +153,68 @@ BEGIN
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
+
+-- 7. FONCTION POUR SUPPRIMER UN AGENT / UTILISATEUR (ADMIN SEULEMENT)
+CREATE OR REPLACE FUNCTION public.delete_agent_user(target_user_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  -- Vérifier que l'appelant est administrateur
+  IF auth.uid() IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.agents 
+    WHERE agents.id = auth.uid() AND agents.role = 'admin'
+  ) THEN
+    RAISE EXCEPTION 'Seuls les administrateurs peuvent supprimer des utilisateurs.';
+  END IF;
+
+  -- Empêcher l'administrateur de supprimer son propre compte
+  IF auth.uid() IS NOT NULL AND auth.uid() = target_user_id THEN
+    RAISE EXCEPTION 'Vous ne pouvez pas supprimer votre propre compte administrateur.';
+  END IF;
+
+  -- Supprimer de public.agents
+  DELETE FROM public.agents WHERE id = target_user_id;
+
+  -- Supprimer du système d'authentification auth.users
+  DELETE FROM auth.users WHERE id = target_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 8. FONCTION POUR FORCER LE MOT DE PASSE D'UN EMPLOYÉ PAR L'ADMIN
+CREATE OR REPLACE FUNCTION public.set_agent_password(target_user_id UUID, new_password TEXT)
+RETURNS VOID AS $$
+BEGIN
+  -- Vérifier que l'appelant est administrateur
+  IF auth.uid() IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.agents 
+    WHERE agents.id = auth.uid() AND agents.role = 'admin'
+  ) THEN
+    RAISE EXCEPTION 'Seuls les administrateurs peuvent modifier les mots de passe des employés.';
+  END IF;
+
+  -- Mettre à jour le mot de passe crypté dans auth.users
+  UPDATE auth.users
+  SET encrypted_password = crypt(new_password, gen_salt('bf')),
+      updated_at = now()
+  WHERE id = target_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 9. MISE À JOUR DE LA POLITIQUE D'ÉCRITURE SUR AGENTS (POUR MODIFICATION DE RÔLES PAR ADMIN)
+DROP POLICY IF EXISTS "Allow write access to agents for admins only" ON public.agents;
+CREATE POLICY "Allow write access to agents for admins only"
+ON public.agents FOR ALL
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1 FROM public.agents 
+        WHERE agents.id = auth.uid() AND agents.role = 'admin'
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM public.agents 
+        WHERE agents.id = auth.uid() AND agents.role = 'admin'
+    )
+);
+
+

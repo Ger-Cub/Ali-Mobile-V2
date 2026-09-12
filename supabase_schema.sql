@@ -323,7 +323,7 @@ ON CONFLICT (imei) DO NOTHING;
 --------------------------------------------------------------------------------
 
 -- 1. Ajouter la colonne city à public.agents
-ALTER TABLE public.agents ADD COLUMN IF NOT EXISTS city TEXT DEFAULT 'Goma';
+ALTER TABLE public.agents ADD COLUMN IF NOT EXISTS city TEXT DEFAULT 'Bukavu';
 
 -- 2. Mettre à jour la contrainte de rôle pour inclure 'operator'
 ALTER TABLE public.agents DROP CONSTRAINT IF EXISTS agents_role_check;
@@ -338,7 +338,7 @@ CREATE OR REPLACE FUNCTION public.create_agent_user(
   phone TEXT,
   code TEXT,
   role TEXT,
-  city TEXT DEFAULT 'Goma'
+  city TEXT DEFAULT 'Bukavu'
 ) RETURNS UUID AS $$
 DECLARE
   new_user_id UUID;
@@ -451,4 +451,61 @@ WITH CHECK (
         WHERE agents.id = auth.uid() AND agents.role IN ('admin', 'operator')
     )
 );
+
+-- 7. Supprimer un utilisateur (admin seulement)
+CREATE OR REPLACE FUNCTION public.delete_agent_user(target_user_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  IF auth.uid() IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.agents 
+    WHERE agents.id = auth.uid() AND agents.role = 'admin'
+  ) THEN
+    RAISE EXCEPTION 'Seuls les administrateurs peuvent supprimer des utilisateurs.';
+  END IF;
+
+  IF auth.uid() IS NOT NULL AND auth.uid() = target_user_id THEN
+    RAISE EXCEPTION 'Vous ne pouvez pas supprimer votre propre compte administrateur.';
+  END IF;
+
+  DELETE FROM public.agents WHERE id = target_user_id;
+  DELETE FROM auth.users WHERE id = target_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 8. Modifier le mot de passe d'un employé par l'admin
+CREATE OR REPLACE FUNCTION public.set_agent_password(target_user_id UUID, new_password TEXT)
+RETURNS VOID AS $$
+BEGIN
+  IF auth.uid() IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.agents 
+    WHERE agents.id = auth.uid() AND agents.role = 'admin'
+  ) THEN
+    RAISE EXCEPTION 'Seuls les administrateurs peuvent modifier les mots de passe des employés.';
+  END IF;
+
+  UPDATE auth.users
+  SET encrypted_password = crypt(new_password, gen_salt('bf')),
+      updated_at = now()
+  WHERE id = target_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 9. Politique d'écriture sur agents pour admins (avec WITH CHECK pour updates)
+DROP POLICY IF EXISTS "Allow write access to agents for admins only" ON public.agents;
+CREATE POLICY "Allow write access to agents for admins only"
+ON public.agents FOR ALL
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1 FROM public.agents 
+        WHERE agents.id = auth.uid() AND agents.role = 'admin'
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM public.agents 
+        WHERE agents.id = auth.uid() AND agents.role = 'admin'
+    )
+);
+
 

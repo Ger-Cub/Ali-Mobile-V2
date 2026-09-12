@@ -37,7 +37,16 @@ import {
   LogOut,
   Loader2,
   ArrowLeftRight,
-  AlertTriangle
+  AlertTriangle,
+  Mail,
+  Key,
+  Edit3,
+  Send,
+  ShieldCheck,
+  Check,
+  Copy,
+  MapPin,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -95,12 +104,31 @@ export default function App() {
 
   // Profile / Subordinate agent Creation form state
   const [newUserRole, setNewUserRole] = useState<'admin' | 'agent' | 'operator'>('agent');
-  const [newUserCity, setNewUserCity] = useState('Goma');
+  const [newUserCity, setNewUserCity] = useState('Bukavu');
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPhone, setNewUserPhone] = useState('');
   const [newUserCode, setNewUserCode] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
+
+  // User Management State in Settings
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'admin' | 'agent' | 'operator'>('all');
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [createPasswordOption, setCreatePasswordOption] = useState<'invite' | 'manual'>('invite');
+  const [createdUserDirectLink, setCreatedUserDirectLink] = useState<{ email: string; name: string; link: string; tempPass?: string } | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [editAgentName, setEditAgentName] = useState('');
+  const [editAgentPhone, setEditAgentPhone] = useState('');
+  const [editAgentCity, setEditAgentCity] = useState('');
+  const [editAgentRole, setEditAgentRole] = useState<'admin' | 'agent' | 'operator'>('agent');
+
+  const [resetPasswordAgent, setResetPasswordAgent] = useState<Agent | null>(null);
+  const [manualPasswordInput, setManualPasswordInput] = useState('');
+  const [deleteAgentConfirm, setDeleteAgentConfirm] = useState<Agent | null>(null);
+  const [isProcessingUserAction, setIsProcessingUserAction] = useState(false);
 
   // New Contract Form State
   const [formStep, setFormStep] = useState(1);
@@ -113,7 +141,7 @@ export default function App() {
     addressNum: '',
     addressAvenue: '',
     neighborhood: '',
-    cityCommune: 'Goma',
+    cityCommune: 'Bukavu',
     identityDocType: "Carte d'électeur" as Client['identityDocType'],
     identityDocNum: '',
     identityCardPhoto: '',
@@ -226,7 +254,7 @@ export default function App() {
             phone: meta.phone || '',
             code: meta.code || 'N/A',
             role: (meta.role as 'admin' | 'agent' | 'operator') || 'agent',
-            city: meta.city || 'Goma',
+            city: meta.city || 'Bukavu',
           };
           setCurrentUser(fallbackAgent);
           if (fallbackAgent.role === 'admin' || fallbackAgent.role === 'operator') {
@@ -344,7 +372,7 @@ export default function App() {
           "Statut Contrat": c.status === 'termine' ? 'Acquitté' : c.status === 'bloque' ? 'Bloqué Knox' : c.status === 'en_retard' ? 'En retard' : 'En cours',
           "Agent Responsable": agent?.name || 'N/A',
           "Code Agent": agent?.code || 'N/A',
-          "Ville Agent": agent?.city || 'Goma',
+          "Ville Agent": agent?.city || 'Bukavu',
         };
       });
 
@@ -394,13 +422,20 @@ export default function App() {
   // Handle creation of agent/operator/sub-admin
   const handleCreateSubordinate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserName || !newUserEmail || !newUserPhone || !newUserCode || !newUserPassword || !newUserCity) {
-      showToast("Veuillez remplir tous les champs.", "error");
+    if (!newUserName || !newUserEmail || !newUserPhone || !newUserCode || !newUserCity) {
+      showToast("Veuillez remplir tous les champs obligatoires.", "error");
+      return;
+    }
+
+    if (createPasswordOption === 'manual' && (!newUserPassword || newUserPassword.length < 6)) {
+      showToast("Le mot de passe doit comporter au moins 6 caractères.", "error");
       return;
     }
 
     try {
+      setIsProcessingUserAction(true);
       showToast("Création du compte en cours...");
+      const pass = createPasswordOption === 'manual' ? newUserPassword : undefined;
       await supabaseDB.createAgent({
         name: newUserName,
         email: newUserEmail,
@@ -408,21 +443,150 @@ export default function App() {
         code: newUserCode,
         role: newUserRole,
         city: newUserCity,
-      }, newUserPassword);
+      }, pass);
+
+      // If invite option, send reset email so user defines password
+      if (createPasswordOption === 'invite') {
+        try {
+          await supabaseDB.sendPasswordResetEmail(newUserEmail);
+          showToast(`Email d'invitation avec réinitialisation envoyé à ${newUserEmail}`);
+        } catch (emailErr) {
+          console.warn("Could not send invite email directly:", emailErr);
+        }
+      }
 
       const roleLabel = newUserRole === 'admin' ? 'Administrateur Adjoint' : newUserRole === 'operator' ? 'Opérateur Utilités' : 'Agent de Vente';
       showToast(`${roleLabel} créé avec succès !`);
+
+      const directLink = `${window.location.origin}/#type=recovery&email=${encodeURIComponent(newUserEmail)}`;
+      setCreatedUserDirectLink({
+        email: newUserEmail,
+        name: newUserName,
+        link: directLink,
+        tempPass: createPasswordOption === 'manual' ? newUserPassword : undefined
+      });
 
       // Reset form fields
       setNewUserName('');
       setNewUserEmail('');
       setNewUserPhone('');
       setNewUserPassword('');
-      setNewUserCity('Goma');
-      refreshData();
+      setNewUserCity('Bukavu');
+      setShowCreateUserModal(false);
+      await refreshData();
     } catch (err: any) {
       console.error(err);
       showToast(err.message || "Erreur lors de la création du compte", "error");
+    } finally {
+      setIsProcessingUserAction(false);
+    }
+  };
+
+  // Update an agent's role
+  const handleUpdateAgentRole = async (agent: Agent, newRole: 'admin' | 'agent' | 'operator') => {
+    if (agent.id === currentUser?.id && newRole !== 'admin') {
+      showToast("Vous ne pouvez pas révoquer vos propres droits administrateur.", "error");
+      return;
+    }
+    try {
+      setIsProcessingUserAction(true);
+      await supabaseDB.updateAgent(agent.id, { role: newRole });
+      const roleLabel = newRole === 'admin' ? 'Administrateur' : newRole === 'operator' ? 'Opérateur Utilités' : 'Agent de Vente';
+      showToast(`Rôle de ${agent.name} mis à jour : ${roleLabel}`);
+      await refreshData();
+    } catch (err: any) {
+      showToast(err.message || "Erreur lors de la mise à jour du rôle", "error");
+    } finally {
+      setIsProcessingUserAction(false);
+    }
+  };
+
+  // Trigger password reset email for an employee
+  const handleSendResetPasswordEmail = async (agent: Agent) => {
+    try {
+      setIsProcessingUserAction(true);
+      await supabaseDB.sendPasswordResetEmail(agent.email);
+      showToast(`Email de réinitialisation envoyé à ${agent.email}`);
+    } catch (err: any) {
+      showToast(err.message || "Erreur lors de l'envoi de l'email de réinitialisation", "error");
+    } finally {
+      setIsProcessingUserAction(false);
+    }
+  };
+
+  // Directly set agent password
+  const handleDirectSetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPasswordAgent || !manualPasswordInput || manualPasswordInput.length < 6) {
+      showToast("Le mot de passe doit contenir au moins 6 caractères.", "error");
+      return;
+    }
+    try {
+      setIsProcessingUserAction(true);
+      await supabaseDB.setAgentPassword(resetPasswordAgent.id, manualPasswordInput);
+      showToast(`Mot de passe mis à jour avec succès pour ${resetPasswordAgent.name}`);
+      setResetPasswordAgent(null);
+      setManualPasswordInput('');
+    } catch (err: any) {
+      showToast(err.message || "Erreur lors de la mise à jour du mot de passe", "error");
+    } finally {
+      setIsProcessingUserAction(false);
+    }
+  };
+
+  // Delete agent
+  const handleDeleteAgent = async () => {
+    if (!deleteAgentConfirm) return;
+    if (deleteAgentConfirm.id === currentUser?.id) {
+      showToast("Vous ne pouvez pas supprimer votre propre compte.", "error");
+      return;
+    }
+    const hasActiveContracts = contracts.some(c => c.agentId === deleteAgentConfirm.id && c.status !== 'termine');
+    if (hasActiveContracts) {
+      showToast(`Impossible de supprimer ${deleteAgentConfirm.name} : cet agent gère des contrats actifs en cours.`, "error");
+      return;
+    }
+    try {
+      setIsProcessingUserAction(true);
+      await supabaseDB.deleteAgent(deleteAgentConfirm.id);
+      showToast(`Utilisateur ${deleteAgentConfirm.name} supprimé avec succès.`);
+      setDeleteAgentConfirm(null);
+      await refreshData();
+    } catch (err: any) {
+      showToast(err.message || "Erreur lors de la suppression de l'utilisateur", "error");
+    } finally {
+      setIsProcessingUserAction(false);
+    }
+  };
+
+  // Open Edit Agent modal
+  const handleOpenEditAgent = (agent: Agent) => {
+    setEditingAgent(agent);
+    setEditAgentName(agent.name);
+    setEditAgentPhone(agent.phone);
+    setEditAgentCity(agent.city || 'Bukavu');
+    setEditAgentRole(agent.role || 'agent');
+  };
+
+  // Save Edit Agent
+  const handleSaveEditAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAgent) return;
+    try {
+      setIsProcessingUserAction(true);
+      await supabaseDB.updateAgent(editingAgent.id, {
+        name: editAgentName,
+        phone: editAgentPhone,
+        city: editAgentCity,
+        role: editAgentRole
+      });
+      showToast(`Informations de ${editAgentName} enregistrées.`);
+      setEditingAgent(null);
+      await refreshData();
+    } catch (err: any) {
+      showToast(err.message || "Erreur lors de la mise à jour", "error");
+    } finally {
+      setIsProcessingUserAction(false);
     }
   };
 
@@ -707,7 +871,7 @@ export default function App() {
         addressNum: '',
         addressAvenue: '',
         neighborhood: '',
-        cityCommune: 'Goma',
+        cityCommune: 'Bukavu',
         identityDocType: "Carte d'électeur",
         identityDocNum: '',
         identityCardPhoto: '',
@@ -1002,8 +1166,8 @@ export default function App() {
               ...(currentUser?.role === 'admin' ? [
                 { id: 'agents', label: 'Statistiques Agents', icon: Activity },
                 { id: 'knox_stock', label: 'Stock Samsung Knox', icon: Database },
-                { id: 'settings', label: 'Paramètres', icon: Settings },
               ] : []),
+              { id: 'settings', label: 'Paramètres', icon: Settings },
             ].map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -1394,7 +1558,7 @@ export default function App() {
                 <div className="relative z-10 flex flex-col justify-between h-full">
                   <div>
                     <h3 className="text-2xl font-black italic uppercase leading-none tracking-tight">Promotion Spéciale Ali Mobile</h3>
-                    <p className="mt-2 text-orange-50 max-w-xl text-sm font-medium">Doublez votre volume Internet et recevez des minutes de communication gratuites pour chaque souscription de smartphone effectuée ce mois-ci. Offre réservée à nos clients à Goma.</p>
+                    <p className="mt-2 text-orange-50 max-w-xl text-sm font-medium">Doublez votre volume Internet et recevez des minutes de communication gratuites pour chaque souscription de smartphone effectuée ce mois-ci. Offre réservée à nos clients à Bukavu.</p>
                   </div>
                   <div>
                     <button
@@ -1417,7 +1581,7 @@ export default function App() {
                     <h3 className="text-sm uppercase font-bold tracking-wider text-slate-800 font-display">
                       Historique des factures et paiements récents
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">Dernières transactions par Mobile Money et espèces à Goma.</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Dernières transactions par Mobile Money et espèces à Bukavu.</p>
                   </div>
                   <div className="mt-2 sm:mt-0 flex space-x-2">
                     <input
@@ -1722,7 +1886,7 @@ export default function App() {
                     </div>
 
                     <div className="bg-slate-50 p-5 rounded-2xl border border-slate-150 space-y-3">
-                      <span className="text-xs font-bold text-slate-700 uppercase tracking-widest block">Adresse physique à Goma</span>
+                      <span className="text-xs font-bold text-slate-700 uppercase tracking-widest block">Adresse physique à Bukavu</span>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div>
                           <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">N°</label>
@@ -1763,7 +1927,7 @@ export default function App() {
                         <input
                           type="text"
                           required
-                          placeholder="Goma, Bukavu, etc."
+                          placeholder="Bukavu, Bukavu, etc."
                           value={clientForm.cityCommune}
                           onChange={(e) => setClientForm(prev => ({ ...prev, cityCommune: e.target.value }))}
                           className="w-full bg-white border border-slate-200 rounded-lg text-sm p-2 focus:outline-none focus:border-orange-500 transition"
@@ -2626,19 +2790,223 @@ export default function App() {
 
           {/* Settings / Configuration Tab */}
           {activeTab === 'settings' && (
-            <div className="no-print space-y-6 max-w-2xl mx-auto w-full">
-              <div className="border-b border-slate-200 pb-4">
-                <h1 className="text-2xl font-black text-slate-900 tracking-tight font-display uppercase italic">
-                  Paramètres de l'Application
-                </h1>
-                <p className="text-xs text-slate-500 mt-1">Gérer les données de base, l'intégration des terminaux et la réinitialisation.</p>
+            <div className="no-print space-y-8 max-w-6xl mx-auto w-full animate-fadeIn pb-12">
+              <div className="border-b border-slate-200 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-black text-slate-900 tracking-tight font-display uppercase italic flex items-center">
+                    <Settings className="w-6 h-6 mr-2 text-orange-500" />
+                    <span>Paramètres & Administration</span>
+                  </h1>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Gestion des utilisateurs, attribution des rôles, sécurité des accès et diagnostic système.
+                  </p>
+                </div>
+
+                {currentUser?.role === 'admin' && (
+                  <button
+                    onClick={() => setShowCreateUserModal(true)}
+                    className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center space-x-2 cursor-pointer shadow-md shadow-orange-500/20 shrink-0 self-start md:self-auto"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>+ Nouvel Utilisateur</span>
+                  </button>
+                )}
               </div>
 
-              <div className="bg-white border border-slate-100 shadow-sm rounded-3xl p-6 md:p-8 space-y-6">
+              {/* SECTION 1: User Management (Admin Only) */}
+              {currentUser?.role === 'admin' ? (
+                <div className="bg-white border border-slate-150 shadow-sm rounded-3xl overflow-hidden">
+                  <div className="p-6 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50/50">
+                    <div>
+                      <h3 className="text-base font-black text-slate-900 uppercase font-display tracking-tight flex items-center">
+                        <Users className="w-4 h-4 mr-2 text-orange-500" />
+                        <span>Gestion des Comptes Utilisateurs & Rôles</span>
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Attribuez des rôles (Admin, Opérateur, Agent), réinitialisez les mots de passe et gérez les accès.
+                      </p>
+                    </div>
 
+                    {/* Filter and Search */}
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          value={userSearchTerm}
+                          onChange={(e) => setUserSearchTerm(e.target.value)}
+                          placeholder="Rechercher nom, email, code, ville..."
+                          className="pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 w-full sm:w-56"
+                        />
+                      </div>
+                      <select
+                        value={userRoleFilter}
+                        onChange={(e) => setUserRoleFilter(e.target.value as any)}
+                        className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-orange-500 font-semibold cursor-pointer"
+                      >
+                        <option value="all">Tous les rôles ({agents.length})</option>
+                        <option value="admin">Administrateurs ({agents.filter(a => a.role === 'admin').length})</option>
+                        <option value="operator">Opérateurs Utilités ({agents.filter(a => a.role === 'operator').length})</option>
+                        <option value="agent">Agents de Vente ({agents.filter(a => a.role === 'agent' || !a.role).length})</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Users Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-500">
+                      <thead>
+                        <tr className="border-b border-slate-150 text-slate-400 uppercase tracking-wider text-[10px] font-bold font-display bg-slate-50/70">
+                          <th className="py-3 px-4">Utilisateur / Identifiant</th>
+                          <th className="py-3 px-4">Contact</th>
+                          <th className="py-3 px-4">Ville</th>
+                          <th className="py-3 px-4">Rôle Attribué</th>
+                          <th className="py-3 px-4 text-center">Sécurité Mot de Passe</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {agents
+                          .filter(a => {
+                            const term = userSearchTerm.toLowerCase();
+                            const matchesSearch =
+                              a.name.toLowerCase().includes(term) ||
+                              a.email.toLowerCase().includes(term) ||
+                              a.code.toLowerCase().includes(term) ||
+                              (a.city && a.city.toLowerCase().includes(term));
+                            const role = a.role || 'agent';
+                            const matchesRole = userRoleFilter === 'all' || role === userRoleFilter;
+                            return matchesSearch && matchesRole;
+                          })
+                          .map((agent) => {
+                            const isCurrentUser = agent.id === currentUser?.id;
+                            const role = agent.role || 'agent';
+                            const roleBadgeColor =
+                              role === 'admin'
+                                ? 'bg-orange-50 text-orange-700 border-orange-200'
+                                : role === 'operator'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+
+                            return (
+                              <tr key={agent.id} className="hover:bg-slate-50/80 transition">
+                                <td className="py-3.5 px-4">
+                                  <div className="flex items-center space-x-3">
+                                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs uppercase text-white shadow-sm ${
+                                      role === 'admin' ? 'bg-gradient-to-tr from-orange-600 to-amber-500' :
+                                      role === 'operator' ? 'bg-gradient-to-tr from-blue-600 to-indigo-500' :
+                                      'bg-gradient-to-tr from-emerald-600 to-teal-500'
+                                    }`}>
+                                      {agent.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center space-x-1.5">
+                                        <span className="font-bold text-slate-900">{agent.name}</span>
+                                        {isCurrentUser && (
+                                          <span className="bg-slate-900 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                                            Vous
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="font-mono text-[11px] text-slate-500 font-semibold bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 inline-block mt-0.5">
+                                        {agent.code}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                <td className="py-3.5 px-4">
+                                  <div className="space-y-0.5">
+                                    <span className="font-mono text-slate-700 block">{agent.email}</span>
+                                    <span className="font-mono text-[11px] text-slate-400 block">{agent.phone}</span>
+                                  </div>
+                                </td>
+
+                                <td className="py-3.5 px-4">
+                                  <span className="inline-flex items-center text-slate-700 font-semibold bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg">
+                                    <MapPin className="w-3 h-3 mr-1 text-orange-500" />
+                                    <span>{agent.city || 'Bukavu'}</span>
+                                  </span>
+                                </td>
+
+                                <td className="py-3.5 px-4">
+                                  <div className="flex items-center space-x-2">
+                                    <select
+                                      value={role}
+                                      disabled={isCurrentUser || isProcessingUserAction}
+                                      onChange={(e) => handleUpdateAgentRole(agent, e.target.value as any)}
+                                      className={`text-xs font-bold px-2.5 py-1.5 rounded-xl border transition cursor-pointer ${roleBadgeColor} ${
+                                        isCurrentUser ? 'opacity-80 cursor-not-allowed' : 'hover:border-slate-400 focus:outline-none focus:ring-1 focus:ring-orange-500'
+                                      }`}
+                                      title={isCurrentUser ? "Vous ne pouvez pas modifier votre propre rôle" : "Changer le rôle"}
+                                    >
+                                      <option value="agent">Agent de Vente</option>
+                                      <option value="operator">Opérateur Utilités</option>
+                                      <option value="admin">Administrateur</option>
+                                    </select>
+                                  </div>
+                                </td>
+
+                                <td className="py-3.5 px-4 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => setResetPasswordAgent(agent)}
+                                    className="inline-flex items-center space-x-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition cursor-pointer"
+                                    title="Réinitialiser ou envoyer le lien de mot de passe"
+                                  >
+                                    <Key className="w-3.5 h-3.5 text-amber-600" />
+                                    <span>Gérer le mot de passe</span>
+                                  </button>
+                                </td>
+
+                                <td className="py-3.5 px-4 text-right">
+                                  <div className="flex items-center justify-end space-x-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditAgent(agent)}
+                                      className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                                      title="Modifier les coordonnées"
+                                    >
+                                      <Edit3 className="w-4 h-4" />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      disabled={isCurrentUser || isProcessingUserAction}
+                                      onClick={() => setDeleteAgentConfirm(agent)}
+                                      className={`p-1.5 rounded-lg transition ${
+                                        isCurrentUser
+                                          ? 'text-slate-200 cursor-not-allowed'
+                                          : 'text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer'
+                                      }`}
+                                      title={isCurrentUser ? "Impossible de supprimer votre propre compte" : "Supprimer l'utilisateur"}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 text-center text-slate-500 space-y-2 text-xs">
+                  <ShieldAlert className="w-8 h-8 text-slate-300 mx-auto" />
+                  <p className="font-bold text-slate-700">Privilèges restreints</p>
+                  <p className="max-w-md mx-auto">
+                    La gestion des utilisateurs, l'attribution des rôles et la réinitialisation des mots de passe sont réservées aux administrateurs.
+                  </p>
+                </div>
+              )}
+
+              {/* SECTION 2: Knox integration diagnostics & DB reset */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Knox integration diagnostics */}
-                <div className="space-y-3">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-display flex items-center">
+                <div className="bg-white border border-slate-150 shadow-sm rounded-3xl p-6 space-y-4">
+                  <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider font-display flex items-center">
                     <Database className="w-4 h-4 mr-2 text-orange-500" />
                     <span>État de l'intégration Samsung Knox API</span>
                   </h4>
@@ -2652,7 +3020,7 @@ export default function App() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-slate-500 font-medium">Version du SDK Ali Knox Controller :</span>
-                      <span className="font-mono text-slate-700 font-bold">v4.18.26-GOMA</span>
+                      <span className="font-mono text-slate-700 font-bold">v4.18.26-Bukavu</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-slate-500 font-medium">Rapprochement Mobile Money :</span>
@@ -2662,12 +3030,12 @@ export default function App() {
                 </div>
 
                 {/* Database Reset Action */}
-                <div className="border-t border-slate-100 pt-6 space-y-3">
+                <div className="bg-white border border-slate-150 shadow-sm rounded-3xl p-6 space-y-4">
                   <h4 className="text-xs font-bold text-red-600 uppercase tracking-wider font-display">
                     Zone de Danger
                   </h4>
                   <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                    La réinitialisation de la base de données effacera tous les clients, contrats et paiements créés par vos agents au cours de cette session de simulation, et restaurera le jeu de données d'origine d'Ali Mobile Goma.
+                    La réinitialisation de la base de données effacera tous les clients, contrats et paiements créés par vos agents au cours de cette session de simulation, et restaurera le jeu de données d'origine d'Ali Mobile Bukavu.
                   </p>
 
                   {!showResetConfirm ? (
@@ -2763,7 +3131,7 @@ export default function App() {
                     <div className="flex justify-between">
                       <span className="text-slate-400 font-medium">Ville d'affectation :</span>
                       <span className="text-slate-800 font-bold">
-                        {activeAgentId === 'admin' ? (currentUser?.city || 'Goma') : (agents.find(a => a.id === activeAgentId)?.city || 'Goma')}, RDC
+                        {activeAgentId === 'admin' ? (currentUser?.city || 'Bukavu') : (agents.find(a => a.id === activeAgentId)?.city || 'Bukavu')}, RDC
                       </span>
                     </div>
                   </div>
@@ -2845,7 +3213,7 @@ export default function App() {
                               required
                               value={newUserCity}
                               onChange={(e) => setNewUserCity(e.target.value)}
-                              placeholder="Ex: Goma, Bukavu, Kinshasa..."
+                              placeholder="Ex: Bukavu, Bukavu, Kinshasa..."
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
                             />
                           </div>
@@ -3074,7 +3442,7 @@ export default function App() {
                 const agentName = viewingContractDoc.agentId === currentUser?.id
                   ? (currentUser?.name || 'Administrateur')
                   : (contractAgent?.name || currentUser?.name || 'Agent Ali Mobile');
-                const agentCity = contractAgent?.city || (viewingContractDoc.agentId === currentUser?.id ? currentUser?.city : undefined) || 'Goma';
+                const agentCity = contractAgent?.city || (viewingContractDoc.agentId === currentUser?.id ? currentUser?.city : undefined) || 'Bukavu';
 
                 if (!client || !phone) return null;
 
@@ -3123,6 +3491,587 @@ export default function App() {
                   </div>
                 );
               })()
+            )}
+
+            {/* Modal: Create User */}
+            {showCreateUserModal && (
+              <div className="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white border border-slate-100 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+                >
+                  <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
+                    <div className="flex items-center space-x-2">
+                      <UserPlus className="w-5 h-5 text-orange-500" />
+                      <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider font-display">
+                        Créer un Nouvel Utilisateur
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => setShowCreateUserModal(false)}
+                      className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleCreateSubordinate} className="p-6 space-y-4 overflow-y-auto">
+                    {/* Role selection */}
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1.5">
+                        Rôle de l'utilisateur
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { id: 'agent', label: 'Agent de Vente', desc: 'Crée contrats & encaisse' },
+                          { id: 'operator', label: 'Opérateur Utilités', desc: 'Gère utilités Airtel/Voda' },
+                          { id: 'admin', label: 'Admin Adjoint', desc: 'Gestion complète' },
+                        ].map((r) => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => setNewUserRole(r.id as any)}
+                            className={`p-3 rounded-2xl border text-left transition cursor-pointer ${
+                              newUserRole === r.id
+                                ? 'border-orange-500 bg-orange-50/60 ring-1 ring-orange-500'
+                                : 'border-slate-200 hover:bg-slate-50 bg-white'
+                            }`}
+                          >
+                            <span className="block text-xs font-bold text-slate-900">{r.label}</span>
+                            <span className="block text-[10px] text-slate-400 mt-0.5 leading-tight">{r.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Code d'identification unique & Ville */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500">
+                            Code ID Unique
+                          </label>
+                          <span className="text-[9px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">
+                            Généré automatiquement
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          value={newUserCode}
+                          onChange={(e) => setNewUserCode(e.target.value)}
+                          placeholder="Ex: AG-243-04"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">Code interne attribué à l'employé.</p>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                          Ville d'affectation
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newUserCity}
+                          onChange={(e) => setNewUserCity(e.target.value)}
+                          placeholder="Ex: Goma, Bukavu, Kinshasa..."
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
+                        />
+                        <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                          {['Goma', 'Bukavu', 'Kinshasa', 'Beni', 'Butembo'].map(city => (
+                            <button
+                              key={city}
+                              type="button"
+                              onClick={() => setNewUserCity(city)}
+                              className={`text-[9px] font-bold px-2 py-0.5 rounded-lg border cursor-pointer transition ${
+                                newUserCity === city ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-slate-50 text-slate-500 border-slate-200'
+                              }`}
+                            >
+                              {city}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Nom & Email */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                          Nom Complet
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newUserName}
+                          onChange={(e) => setNewUserName(e.target.value)}
+                          placeholder="Ex: Patrick Kasereka"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                          Adresse Email (Connexion)
+                        </label>
+                        <input
+                          type="email"
+                          required
+                          value={newUserEmail}
+                          onChange={(e) => setNewUserEmail(e.target.value)}
+                          placeholder="Ex: p.kasereka@alimobile.com"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Téléphone */}
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                        Numéro de Téléphone (WhatsApp / SMS)
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newUserPhone}
+                        onChange={(e) => setNewUserPhone(e.target.value)}
+                        placeholder="Ex: +243 970 000 000"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
+                      />
+                    </div>
+
+                    {/* Password Options */}
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-700 block">
+                        Configuration du mot de passe
+                      </label>
+                      <div className="space-y-2">
+                        <label className="flex items-start space-x-2.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="passOpt"
+                            checked={createPasswordOption === 'invite'}
+                            onChange={() => setCreatePasswordOption('invite')}
+                            className="mt-0.5 text-orange-500 focus:ring-orange-500"
+                          />
+                          <div>
+                            <span className="text-xs font-bold text-slate-800 block">
+                              Envoyer une invitation par email & générer le lien de configuration (Recommandé)
+                            </span>
+                            <span className="text-[10px] text-slate-500 block">
+                              L'employé recevra un email ou vous pourrez lui transmettre le lien direct pour renseigner son propre mot de passe.
+                            </span>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start space-x-2.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="passOpt"
+                            checked={createPasswordOption === 'manual'}
+                            onChange={() => setCreatePasswordOption('manual')}
+                            className="mt-0.5 text-orange-500 focus:ring-orange-500"
+                          />
+                          <div>
+                            <span className="text-xs font-bold text-slate-800 block">
+                              Définir manuellement un mot de passe temporaire
+                            </span>
+                            <span className="text-[10px] text-slate-500 block">
+                              Vous définissez le mot de passe initial dès maintenant.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+
+                      {createPasswordOption === 'manual' && (
+                        <div className="pt-2 animate-fadeIn">
+                          <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                            Mot de passe initial (min 6 caractères)
+                          </label>
+                          <input
+                            type="password"
+                            required={createPasswordOption === 'manual'}
+                            value={newUserPassword}
+                            onChange={(e) => setNewUserPassword(e.target.value)}
+                            placeholder="Entrez un mot de passe temporaire..."
+                            className="w-full bg-white border border-slate-200 rounded-xl text-xs px-3 py-2 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer actions */}
+                    <div className="pt-2 flex justify-end space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateUserModal(false)}
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isProcessingUserAction}
+                        className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 px-6 rounded-xl text-xs transition flex items-center space-x-2 cursor-pointer shadow-md shadow-orange-500/20 disabled:opacity-50"
+                      >
+                        {isProcessingUserAction ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Création...</span>
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="w-3.5 h-3.5" />
+                            <span>Créer l'utilisateur</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              </div>
+            )}
+
+            {/* Modal: Created User Direct Link */}
+            {createdUserDirectLink && (
+              <div className="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white border border-slate-100 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl p-6 space-y-4"
+                >
+                  <div className="flex items-center space-x-3 text-emerald-600">
+                    <div className="w-10 h-10 bg-emerald-50 rounded-2xl flex items-center justify-center">
+                      <Check className="w-6 h-6 text-emerald-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-900 uppercase font-display tracking-tight">
+                        Compte créé avec succès !
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        L'utilisateur <span className="font-bold text-slate-800">{createdUserDirectLink.name}</span> ({createdUserDirectLink.email}) est enregistré.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3 text-xs">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Lien direct pour renseigner le mot de passe
+                    </span>
+                    <p className="text-slate-600 leading-relaxed text-[11px]">
+                      Vous pouvez diriger directement l'utilisateur sur cette page pour qu'il renseigne son mot de passe ou lui transmettre le lien par WhatsApp/Email :
+                    </p>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={createdUserDirectLink.link}
+                        className="flex-grow bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-700 select-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(createdUserDirectLink.link);
+                          setCopiedLink(true);
+                          setTimeout(() => setCopiedLink(false), 2000);
+                        }}
+                        className="bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 px-3 py-2 rounded-xl font-bold flex items-center space-x-1 transition cursor-pointer"
+                      >
+                        {copiedLink ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Copié !</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copier</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {createdUserDirectLink.tempPass && (
+                      <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 font-mono text-xs">
+                        Mot de passe temporaire défini : <span className="font-bold">{createdUserDirectLink.tempPass}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2">
+                    <a
+                      href={createdUserDirectLink.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-orange-600 hover:text-orange-700 font-bold flex items-center space-x-1 cursor-pointer"
+                    >
+                      <span>Ouvrir la page de configuration</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => setCreatedUserDirectLink(null)}
+                      className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 px-5 rounded-xl text-xs transition cursor-pointer"
+                    >
+                      Terminé
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+
+            {/* Modal: Reset Password */}
+            {resetPasswordAgent && (
+              <div className="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white border border-slate-100 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-5"
+                >
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div className="flex items-center space-x-2">
+                      <Key className="w-5 h-5 text-amber-500" />
+                      <h3 className="text-sm font-black text-slate-900 uppercase font-display tracking-tight">
+                        Mot de Passe : {resetPasswordAgent.name}
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setResetPasswordAgent(null);
+                        setManualPasswordInput('');
+                      }}
+                      className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4 text-xs">
+                    {/* Option 1: Trigger Reset Email */}
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block">
+                        Option 1 : Email de Réinitialisation
+                      </span>
+                      <p className="text-slate-600 text-[11px]">
+                        Déclencher l'envoi d'un email contenant un lien sécurisé permettant à l'employé de réinitialiser son mot de passe.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={isProcessingUserAction}
+                        onClick={() => handleSendResetPasswordEmail(resetPasswordAgent)}
+                        className="w-full bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 py-2 px-3 rounded-xl font-bold flex items-center justify-center space-x-2 transition cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Envoyer l'email à {resetPasswordAgent.email}</span>
+                      </button>
+                    </div>
+
+                    {/* Option 2: Direct set password */}
+                    <form onSubmit={handleDirectSetPassword} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block">
+                        Option 2 : Définir un nouveau mot de passe directement
+                      </span>
+                      <p className="text-slate-600 text-[11px]">
+                        Attribuez immédiatement un nouveau mot de passe pour cet employé.
+                      </p>
+                      <input
+                        type="password"
+                        value={manualPasswordInput}
+                        onChange={(e) => setManualPasswordInput(e.target.value)}
+                        placeholder="Nouveau mot de passe (min 6 caractères)..."
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-orange-500"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isProcessingUserAction || manualPasswordInput.length < 6}
+                        className="w-full bg-slate-900 hover:bg-slate-800 text-white py-2 px-3 rounded-xl font-bold flex items-center justify-center space-x-2 transition cursor-pointer disabled:opacity-50"
+                      >
+                        <Key className="w-3.5 h-3.5" />
+                        <span>Enregistrer le nouveau mot de passe</span>
+                      </button>
+                    </form>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResetPasswordAgent(null);
+                        setManualPasswordInput('');
+                      }}
+                      className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                    >
+                      Fermer
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+
+            {/* Modal: Edit User */}
+            {editingAgent && (
+              <div className="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white border border-slate-100 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4"
+                >
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                    <div className="flex items-center space-x-2">
+                      <Edit3 className="w-5 h-5 text-orange-500" />
+                      <h3 className="text-sm font-black text-slate-900 uppercase font-display tracking-tight">
+                        Modifier l'Utilisateur
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => setEditingAgent(null)}
+                      className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveEditAgent} className="space-y-4">
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                        Nom Complet
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editAgentName}
+                        onChange={(e) => setEditAgentName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                        Numéro de Téléphone
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editAgentPhone}
+                        onChange={(e) => setEditAgentPhone(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                        Ville d'affectation
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editAgentCity}
+                        onChange={(e) => setEditAgentCity(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                        Rôle Attribué
+                      </label>
+                      <select
+                        value={editAgentRole}
+                        disabled={editingAgent.id === currentUser?.id}
+                        onChange={(e) => setEditAgentRole(e.target.value as any)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 font-bold cursor-pointer disabled:opacity-50"
+                      >
+                        <option value="agent">Agent de Vente</option>
+                        <option value="operator">Opérateur Utilités</option>
+                        <option value="admin">Administrateur</option>
+                      </select>
+                      {editingAgent.id === currentUser?.id && (
+                        <p className="text-[10px] text-slate-400 mt-1">Vous ne pouvez pas révoquer votre propre rôle.</p>
+                      )}
+                    </div>
+
+                    <div className="pt-2 flex justify-end space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingAgent(null)}
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isProcessingUserAction}
+                        className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-5 rounded-xl text-xs transition cursor-pointer shadow-md shadow-orange-500/20 disabled:opacity-50"
+                      >
+                        Enregistrer
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              </div>
+            )}
+
+            {/* Modal: Delete Agent Confirm */}
+            {deleteAgentConfirm && (
+              <div className="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white border border-slate-100 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4"
+                >
+                  <div className="flex items-center space-x-3 text-red-600">
+                    <div className="w-10 h-10 bg-red-50 rounded-2xl flex items-center justify-center shrink-0">
+                      <Trash2 className="w-5 h-5 text-red-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-900 uppercase font-display tracking-tight">
+                        Supprimer l'Utilisateur
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Êtes-vous certain de vouloir supprimer le compte de <span className="font-bold text-slate-800">{deleteAgentConfirm.name}</span> ({deleteAgentConfirm.code}) ?
+                      </p>
+                    </div>
+                  </div>
+
+                  {contracts.some(c => c.agentId === deleteAgentConfirm.id) && (
+                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-2xl text-xs text-amber-800 space-y-1">
+                      <div className="flex items-center space-x-1.5 font-bold">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Attention aux contrats liés</span>
+                      </div>
+                      <p className="text-[11px]">
+                        Cet agent est associé à des contrats dans l'application. Si certains sont encore actifs, la suppression sera bloquée pour préserver l'intégrité des données.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end space-x-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setDeleteAgentConfirm(null)}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isProcessingUserAction}
+                      onClick={handleDeleteAgent}
+                      className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-5 rounded-xl text-xs transition cursor-pointer shadow-md shadow-red-500/20 disabled:opacity-50"
+                    >
+                      {isProcessingUserAction ? 'Suppression...' : 'Supprimer Définitivement'}
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
             )}
           </AnimatePresence>
 

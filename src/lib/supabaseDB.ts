@@ -10,7 +10,7 @@ export function mapAgent(db: any): Agent {
     phone: db.phone,
     code: db.code,
     role: db.role,
-    city: db.city || 'Goma',
+    city: db.city || 'Bukavu',
   };
 }
 
@@ -343,20 +343,65 @@ export const supabaseDB = {
   },
 
   // ADMIN CREATE AGENT SUBORDINATE (Agent or Operator)
-  async createAgent(agent: Omit<Agent, 'id'>, password: string): Promise<string> {
+  async createAgent(agent: Omit<Agent, 'id'>, password?: string): Promise<string> {
+    // Generate secure temp password if not provided
+    const effectivePassword = password || `Ali${Math.random().toString(36).slice(-8)}!${Math.floor(100 + Math.random() * 900)}`;
+
     // Call the postgres function RPC 'create_agent_user'
     const { data, error } = await supabase.rpc('create_agent_user', {
       email: agent.email,
-      password: password,
+      password: effectivePassword,
       name: agent.name,
       phone: agent.phone,
       code: agent.code,
       role: agent.role || 'agent',
-      city: agent.city || 'Goma',
+      city: agent.city || 'Bukavu',
     });
 
     if (error) throw error;
     return data as string; // returns created user UUID
+  },
+
+  // ADMIN UPDATE AGENT (ROLE, CITY, INFO)
+  async updateAgent(
+    id: string,
+    updates: Partial<Pick<Agent, 'role' | 'city' | 'name' | 'phone'>>
+  ): Promise<void> {
+    const dbUpdates: any = {};
+    if (updates.role !== undefined) dbUpdates.role = updates.role;
+    if (updates.city !== undefined) dbUpdates.city = updates.city;
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
+
+    const { error } = await supabase.from('agents').update(dbUpdates).eq('id', id);
+    if (error) throw error;
+  },
+
+  // ADMIN DELETE AGENT (CASCADE WITH AUTH)
+  async deleteAgent(id: string): Promise<void> {
+    const { error: rpcError } = await supabase.rpc('delete_agent_user', { target_user_id: id });
+    if (rpcError) {
+      console.warn("RPC delete_agent_user fallback to direct table delete:", rpcError);
+      const { error } = await supabase.from('agents').delete().eq('id', id);
+      if (error) throw error;
+    }
+  },
+
+  // TRIGGER PASSWORD RESET EMAIL
+  async sendPasswordResetEmail(email: string): Promise<void> {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}`,
+    });
+    if (error) throw error;
+  },
+
+  // ADMIN DIRECT SET PASSWORD FOR EMPLOYEE
+  async setAgentPassword(id: string, newPassword: string): Promise<void> {
+    const { error } = await supabase.rpc('set_agent_password', {
+      target_user_id: id,
+      new_password: newPassword,
+    });
+    if (error) throw error;
   },
 
   // UTILITY TRANSACTIONS (AIRTEL / VODACOM)

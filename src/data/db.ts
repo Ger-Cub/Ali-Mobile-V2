@@ -121,8 +121,8 @@ export const SEED_CLIENTS: Client[] = [
     phoneUrgency: '+243 812 345 678',
     addressNum: '17',
     addressAvenue: 'des Écoles',
-    neighborhood: 'Goma',
-    cityCommune: 'Goma',
+    neighborhood: 'Bukavu',
+    cityCommune: 'Bukavu',
     identityDocType: 'Carte d\'électeur',
     identityDocNum: 'ELEC-243-98765-A',
     registeredAt: '2026-06-08',
@@ -138,7 +138,7 @@ export const SEED_CLIENTS: Client[] = [
     addressNum: '45',
     addressAvenue: 'du Lac',
     neighborhood: 'Himbi',
-    cityCommune: 'Goma',
+    cityCommune: 'Bukavu',
     identityDocType: 'Passeport',
     identityDocNum: 'OP-0089122',
     registeredAt: '2026-07-02',
@@ -154,7 +154,7 @@ export const SEED_CLIENTS: Client[] = [
     addressNum: '102',
     addressAvenue: 'de la Révolution',
     neighborhood: 'Katindo',
-    cityCommune: 'Goma',
+    cityCommune: 'Bukavu',
     identityDocType: 'Carte d\'électeur',
     identityDocNum: 'ELEC-243-55122-C',
     registeredAt: '2026-07-10',
@@ -170,7 +170,7 @@ export const SEED_CLIENTS: Client[] = [
     addressNum: '8B',
     addressAvenue: 'Kanyamuhanga',
     neighborhood: 'Les Volcans',
-    cityCommune: 'Goma',
+    cityCommune: 'Bukavu',
     identityDocType: 'Permis de conduire',
     identityDocNum: 'PERM-243-00912',
     registeredAt: '2026-05-15',
@@ -237,7 +237,7 @@ export const SEED_CONTRATS: Contract[] = [
   }
 ];
 
-// 1 USD = 2800 CDF (Goma Rate circa 2026)
+// 1 USD = 2800 CDF (Bukavu Rate circa 2026)
 export const USD_TO_CDF = 2800;
 
 export const SEED_PAIEMENTS: Payment[] = [
