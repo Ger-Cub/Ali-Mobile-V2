@@ -679,3 +679,4 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     </div>
   );
 };
+
