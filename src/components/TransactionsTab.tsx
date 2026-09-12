@@ -198,17 +198,17 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Header & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-white uppercase italic tracking-tight font-display">
+            <h1 className="text-2xl font-black text-slate-900 uppercase italic tracking-tight font-display">
               Transactions Utilités
             </h1>
-            <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-orange-500/10 text-orange-400 border border-orange-500/20">
+            <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-orange-50 text-orange-600 border border-orange-200 rounded-none">
               Airtel & Vodacom
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-500 mt-1 font-mono">
             Service de vente et de gestion des flux d'utilités (dépôts et retraits d'argent)
           </p>
         </div>
@@ -216,17 +216,17 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={handleExportExcel}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold uppercase tracking-wider border border-slate-700 transition cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold uppercase tracking-wider border border-slate-200 rounded-none transition cursor-pointer shadow-sm"
             title="Exporter la table en Excel .xlsx"
           >
-            <Download className="w-4 h-4 text-emerald-400" />
+            <Download className="w-4 h-4 text-emerald-600" />
             <span>Exporter .XLSX</span>
           </button>
 
           {canCreate && (
             <button
               onClick={openNewModal}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold uppercase tracking-wider transition shadow-lg shadow-orange-500/20 cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold uppercase tracking-wider rounded-none transition shadow-none cursor-pointer"
             >
               <PlusCircle className="w-4 h-4" />
               <span>Nouvelle Transaction</span>
@@ -237,97 +237,101 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-slate-900/60 border border-slate-800 p-5">
+        {/* Metric 1: Volume Global */}
+        <div className="bg-white border border-slate-200 p-5 rounded-none shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Volume Global</span>
-            <div className="w-9 h-9 bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400">
-              <DollarSign className="w-5 h-5" />
+            <span className="text-[10px] text-slate-400 font-bold uppercase font-mono tracking-wider">Volume Global</span>
+            <div className="w-7 h-7 bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600 rounded-none">
+              <DollarSign className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <span className="text-2xl font-black text-white font-mono">{totalVolume.toLocaleString('fr-FR')} $</span>
-            <p className="text-[11px] text-slate-500 mt-1">{transactions.length} transactions au total</p>
+          <div className="mt-2">
+            <span className="text-3xl font-black text-slate-900 font-mono">{totalVolume.toLocaleString('fr-FR')} $</span>
+            <p className="text-[11px] text-slate-400 mt-1 font-mono">{transactions.length} transactions au total</p>
           </div>
         </div>
 
-        <div className="bg-slate-900/60 border border-slate-800 p-5">
+        {/* Metric 2: Total Dépôts */}
+        <div className="bg-white border border-slate-200 p-5 rounded-none shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Total Dépôts</span>
-            <div className="w-9 h-9 bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-              <ArrowDownLeft className="w-5 h-5" />
+            <span className="text-[10px] text-slate-400 font-bold uppercase font-mono tracking-wider">Total Dépôts</span>
+            <div className="w-7 h-7 bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 rounded-none">
+              <ArrowDownLeft className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <span className="text-2xl font-black text-emerald-400 font-mono">{totalDepots.toLocaleString('fr-FR')} $</span>
-            <p className="text-[11px] text-slate-500 mt-1">
+          <div className="mt-2">
+            <span className="text-3xl font-black text-emerald-600 font-mono">{totalDepots.toLocaleString('fr-FR')} $</span>
+            <p className="text-[11px] text-slate-400 mt-1 font-mono">
               {transactions.filter(t => t.transactionType === 'dépôt').length} opérations entrantes
             </p>
           </div>
         </div>
 
-        <div className="bg-slate-900/60 border border-slate-800 p-5">
+        {/* Metric 3: Total Retraits */}
+        <div className="bg-white border border-slate-200 p-5 rounded-none shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Total Retraits</span>
-            <div className="w-9 h-9 bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
-              <ArrowUpRight className="w-5 h-5" />
+            <span className="text-[10px] text-slate-400 font-bold uppercase font-mono tracking-wider">Total Retraits</span>
+            <div className="w-7 h-7 bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 rounded-none">
+              <ArrowUpRight className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3">
-            <span className="text-2xl font-black text-rose-400 font-mono">{totalRetraits.toLocaleString('fr-FR')} $</span>
-            <p className="text-[11px] text-slate-500 mt-1">
+          <div className="mt-2">
+            <span className="text-3xl font-black text-rose-600 font-mono">{totalRetraits.toLocaleString('fr-FR')} $</span>
+            <p className="text-[11px] text-slate-400 mt-1 font-mono">
               {transactions.filter(t => t.transactionType === 'retrait').length} opérations sortantes
             </p>
           </div>
         </div>
 
-        <div className="bg-slate-900/60 border border-slate-800 p-5">
+        {/* Metric 4: Répartition Opérateur */}
+        <div className="bg-white border border-slate-200 p-5 rounded-none shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Répartition Opérateur</span>
-            <div className="w-9 h-9 bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-              <Layers className="w-5 h-5" />
+            <span className="text-[10px] text-slate-400 font-bold uppercase font-mono tracking-wider">Répartition Opérateur</span>
+            <div className="w-7 h-7 bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 rounded-none">
+              <Layers className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3 flex items-center justify-between text-xs font-mono">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 bg-red-500 rounded-full inline-block" />
-              <span className="text-slate-300">Airtel:</span>
-              <span className="font-bold text-white">{transactions.filter(t => t.operator === 'Airtel').length}</span>
+            <div className="flex items-center gap-1.5 bg-red-50 border border-red-100 px-2 py-1 rounded-none">
+              <span className="w-2 h-2 bg-red-500 rounded-none inline-block" />
+              <span className="text-red-700 font-bold">Airtel:</span>
+              <span className="font-black text-red-900">{transactions.filter(t => t.operator === 'Airtel').length}</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 bg-red-600 rounded-full inline-block" />
-              <span className="text-slate-300">Vodacom:</span>
-              <span className="font-bold text-white">{transactions.filter(t => t.operator === 'Vodacom').length}</span>
+            <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-100 px-2 py-1 rounded-none">
+              <span className="w-2 h-2 bg-rose-600 rounded-none inline-block" />
+              <span className="text-rose-700 font-bold">Vodacom:</span>
+              <span className="font-black text-rose-900">{transactions.filter(t => t.operator === 'Vodacom').length}</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="bg-slate-900/60 border border-slate-800 p-4 flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
+      <div className="bg-white border border-slate-200 p-4 rounded-none shadow-sm flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
         {/* Search */}
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Rechercher par client, téléphone, N° transaction, référence..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 pl-10 pr-4 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-orange-500"
+            className="w-full bg-slate-50 border border-slate-200 pl-10 pr-4 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 rounded-none font-medium"
           />
         </div>
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 p-1">
-            <span className="text-[10px] text-slate-500 uppercase px-2 font-bold">Type :</span>
+          <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 p-1 rounded-none">
+            <span className="text-[10px] text-slate-500 uppercase px-2 font-bold font-mono">Type :</span>
             {(['all', 'dépôt', 'retrait'] as const).map(type => (
               <button
                 key={type}
                 onClick={() => setFilterType(type)}
-                className={`px-3 py-1 text-xs font-bold uppercase transition ${
+                className={`px-3 py-1 text-xs font-bold uppercase transition rounded-none cursor-pointer ${
                   filterType === type
-                    ? 'bg-orange-500 text-white'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-orange-500 text-white shadow-none'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
                 {type === 'all' ? 'Tous' : type}
@@ -335,16 +339,16 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
             ))}
           </div>
 
-          <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 p-1">
-            <span className="text-[10px] text-slate-500 uppercase px-2 font-bold">Opérateur :</span>
+          <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 p-1 rounded-none">
+            <span className="text-[10px] text-slate-500 uppercase px-2 font-bold font-mono">Opérateur :</span>
             {(['all', 'Airtel', 'Vodacom'] as const).map(op => (
               <button
                 key={op}
                 onClick={() => setFilterOperator(op)}
-                className={`px-3 py-1 text-xs font-bold uppercase transition ${
+                className={`px-3 py-1 text-xs font-bold uppercase transition rounded-none cursor-pointer ${
                   filterOperator === op
-                    ? 'bg-orange-500 text-white'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-orange-500 text-white shadow-none'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
                 {op === 'all' ? 'Tous' : op}
@@ -355,11 +359,11 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
       </div>
 
       {/* Transactions Table */}
-      <div className="bg-slate-900/60 border border-slate-800 overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-none shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-950/80 border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-400 font-bold">
+              <tr className="bg-slate-50/70 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400 font-bold font-display">
                 <th className="py-3 px-4">Date / Réf</th>
                 <th className="py-3 px-4">Client</th>
                 <th className="py-3 px-4">Type</th>
@@ -370,13 +374,13 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                 <th className="py-3 px-4">Agent Enregistreur</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-xs">
+            <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
               {filteredTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-500">
-                    <FileText className="w-8 h-8 mx-auto mb-2 text-slate-600 opacity-50" />
-                    <p className="font-bold">Aucune transaction trouvée</p>
-                    <p className="text-[11px] text-slate-600 mt-1">
+                  <td colSpan={8} className="py-12 text-center text-slate-400">
+                    <FileText className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                    <p className="font-bold text-slate-600">Aucune transaction trouvée</p>
+                    <p className="text-[11px] text-slate-400 mt-1">
                       {searchTerm || filterType !== 'all' || filterOperator !== 'all'
                         ? 'Essayez de modifier vos filtres'
                         : 'Enregistrez votre première transaction'}
@@ -388,10 +392,10 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   const agent = agents.find(a => a.id === tx.operatorId);
                   const isDeposit = tx.transactionType === 'dépôt';
                   return (
-                    <tr key={tx.id} className="hover:bg-slate-800/30 transition">
+                    <tr key={tx.id} className="hover:bg-slate-50/80 transition">
                       <td className="py-3.5 px-4 font-mono">
-                        <div className="text-white font-bold text-xs">{tx.referenceNumber}</div>
-                        <div className="text-[10px] text-slate-500">
+                        <div className="text-slate-900 font-bold text-xs">{tx.referenceNumber}</div>
+                        <div className="text-[10px] text-slate-400">
                           {new Date(tx.createdAt).toLocaleDateString('fr-FR', {
                             day: '2-digit',
                             month: 'short',
@@ -401,18 +405,18 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         </div>
                       </td>
                       <td className="py-3.5 px-4">
-                        <div className="font-bold text-white">{tx.clientName}</div>
-                        <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1">
-                          <Phone className="w-3 h-3 text-slate-500" />
+                        <div className="font-bold text-slate-900">{tx.clientName}</div>
+                        <div className="text-[11px] text-slate-500 font-mono flex items-center gap-1">
+                          <Phone className="w-3 h-3 text-slate-400" />
                           {tx.phoneNumber}
                         </div>
                       </td>
                       <td className="py-3.5 px-4">
                         <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-none ${
                             isDeposit
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}
                         >
                           {isDeposit ? (
@@ -424,33 +428,33 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-right font-mono font-black text-sm">
-                        <span className={isDeposit ? 'text-emerald-400' : 'text-rose-400'}>
+                        <span className={isDeposit ? 'text-emerald-600' : 'text-rose-600'}>
                           {isDeposit ? '+' : '-'}{tx.amount.toLocaleString('fr-FR')} $
                         </span>
                       </td>
                       <td className="py-3.5 px-4">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                          className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-none ${
                             tx.operator === 'Airtel'
-                              ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                              : 'bg-rose-600/10 text-rose-300 border border-rose-600/20'
+                              ? 'bg-red-50 text-red-700 border border-red-200'
+                              : 'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}
                         >
                           {tx.operator}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 font-mono text-slate-300">
+                      <td className="py-3.5 px-4 font-mono text-slate-700 font-semibold">
                         {tx.operatorTransactionNumber}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-400 max-w-[200px] truncate" title={tx.reason}>
+                      <td className="py-3.5 px-4 text-slate-500 max-w-[200px] truncate" title={tx.reason}>
                         {tx.reason}
                       </td>
                       <td className="py-3.5 px-4">
-                        <div className="text-slate-300 font-medium">
+                        <div className="text-slate-800 font-semibold">
                           {agent ? agent.name : 'Opérateur'}
                         </div>
-                        <div className="text-[10px] text-slate-500">
-                          {agent?.city ? `Ville: ${agent.city}` : 'Bukavu'}
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          {agent?.city ? `Ville: ${agent.city}` : 'Goma'}
                         </div>
                       </td>
                     </tr>
@@ -462,81 +466,88 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
         </div>
       </div>
 
-      {/* Modal - Nouvelle Transaction */}
+      {/* Modal - Nouvelle Transaction (Design System Conforme) */}
       <AnimatePresence>
         {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm no-print">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-xl bg-slate-900 border border-slate-700 shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto"
+              className="w-full max-w-xl bg-white border border-slate-200 shadow-2xl rounded-none p-6 relative max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-orange-500 text-white flex items-center justify-center font-bold">
-                    A
+              {/* Modal Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-white border border-slate-200 flex items-center justify-center rounded-none p-0.5 shrink-0 shadow-sm">
+                    <img src="/logo_alimobile.jpeg" alt="Ali Mobile" className="w-full h-full object-contain" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-black text-white uppercase italic tracking-tight font-display">
+                    <h2 className="text-base font-black text-slate-900 uppercase italic tracking-tight font-display">
                       Enregistrer une Transaction
                     </h2>
-                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">
-                      Service d'Utilités Ali Mobile
+                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-mono font-bold">
+                      Service d'Utilités Ali Mobile (Airtel & Vodacom)
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setShowModal(false)}
-                  className="text-slate-400 hover:text-white transition p-1"
+                  className="text-slate-400 hover:text-slate-700 transition p-1.5 rounded-none hover:bg-slate-100 cursor-pointer"
+                  title="Fermer"
                 >
-                  ✕
+                  <span className="text-base font-bold leading-none">✕</span>
                 </button>
               </div>
 
               <form onSubmit={handleSubmit} className="mt-5 space-y-4">
                 {/* Reference Interne */}
                 <div>
-                  <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1.5">
-                    N° Référence Interne (Généré)
-                  </label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500">
+                      N° Référence Interne
+                    </label>
+                    <span className="text-[9px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded-none border border-emerald-200">
+                      Généré automatiquement
+                    </span>
+                  </div>
                   <input
                     type="text"
                     readOnly
                     value={referenceNum}
-                    className="w-full bg-slate-950 border border-slate-800 text-orange-400 font-mono text-xs px-3.5 py-2.5 focus:outline-none"
+                    className="w-full bg-slate-100 border border-slate-200 text-slate-700 font-mono text-xs px-3.5 py-2.5 rounded-none font-bold select-all"
                   />
                 </div>
 
                 {/* Type de transaction */}
                 <div>
-                  <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1.5">
+                  <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1.5">
                     Type de Transaction *
                   </label>
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
                       onClick={() => setTransactionType('dépôt')}
-                      className={`py-3 px-4 border text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer ${
+                      className={`py-3 px-4 border rounded-none text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer ${
                         transactionType === 'dépôt'
-                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
-                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                          ? 'bg-emerald-50 border-emerald-400 text-emerald-700 ring-1 ring-emerald-400'
+                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-slate-300'
                       }`}
                     >
-                      <ArrowDownLeft className="w-4 h-4" />
+                      <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
                       <span>Dépôt d'argent</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setTransactionType('retrait')}
-                      className={`py-3 px-4 border text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer ${
+                      className={`py-3 px-4 border rounded-none text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer ${
                         transactionType === 'retrait'
-                          ? 'bg-rose-500/20 border-rose-500 text-rose-400'
-                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                          ? 'bg-rose-50 border-rose-400 text-rose-700 ring-1 ring-rose-400'
+                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-slate-300'
                       }`}
                     >
-                      <ArrowUpRight className="w-4 h-4" />
+                      <ArrowUpRight className="w-4 h-4 text-rose-600" />
                       <span>Retrait d'argent</span>
                     </button>
                   </div>
@@ -544,17 +555,17 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
                 {/* Opérateur Telecom */}
                 <div>
-                  <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1.5">
+                  <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1.5">
                     Opérateur Télécom *
                   </label>
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
                       onClick={() => setOperator('Airtel')}
-                      className={`py-2.5 px-4 border text-xs font-bold uppercase tracking-wider transition cursor-pointer ${
+                      className={`py-2.5 px-4 border rounded-none text-xs font-bold uppercase tracking-wider transition cursor-pointer ${
                         operator === 'Airtel'
-                          ? 'bg-red-500/20 border-red-500 text-red-400'
-                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                          ? 'bg-red-50 border-red-400 text-red-700 ring-1 ring-red-400'
+                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-slate-300'
                       }`}
                     >
                       Airtel Money
@@ -563,10 +574,10 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     <button
                       type="button"
                       onClick={() => setOperator('Vodacom')}
-                      className={`py-2.5 px-4 border text-xs font-bold uppercase tracking-wider transition cursor-pointer ${
+                      className={`py-2.5 px-4 border rounded-none text-xs font-bold uppercase tracking-wider transition cursor-pointer ${
                         operator === 'Vodacom'
-                          ? 'bg-rose-600/20 border-rose-600 text-rose-300'
-                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                          ? 'bg-rose-50 border-rose-400 text-rose-700 ring-1 ring-rose-400'
+                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-slate-300'
                       }`}
                     >
                       Vodacom M-Pesa
@@ -577,21 +588,21 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                 {/* Nom du Client & Téléphone */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1.5">
+                    <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1.5">
                       Nom complet du Client *
                     </label>
                     <input
                       type="text"
                       required
-                      placeholder="ex: Patrick Kambale"
+                      placeholder="Ex: Patrick Kambale"
                       value={clientName}
                       onChange={e => setClientName(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 text-white text-xs px-3.5 py-2.5 focus:outline-none focus:border-orange-500"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-none text-slate-800 text-xs px-3.5 py-2.5 focus:outline-none focus:border-orange-500 font-bold"
                     />
                   </div>
 
                   <div>
-                    <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1.5">
+                    <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1.5">
                       Numéro de Téléphone *
                     </label>
                     <input
@@ -600,7 +611,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                       placeholder="+243 ..."
                       value={phoneNumber}
                       onChange={e => setPhoneNumber(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 text-white text-xs px-3.5 py-2.5 focus:outline-none focus:border-orange-500 font-mono"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-none text-slate-800 text-xs px-3.5 py-2.5 focus:outline-none focus:border-orange-500 font-mono font-bold"
                     />
                   </div>
                 </div>
@@ -608,7 +619,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                 {/* Montant ($) & Numéro Transaction Opérateur */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1.5">
+                    <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1.5">
                       Montant ($ USD) *
                     </label>
                     <input
@@ -619,46 +630,46 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                       placeholder="0.00"
                       value={amount}
                       onChange={e => setAmount(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 text-white text-xs px-3.5 py-2.5 focus:outline-none focus:border-orange-500 font-mono font-bold"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-none text-slate-900 text-xs px-3.5 py-2.5 focus:outline-none focus:border-orange-500 font-mono font-black"
                     />
                   </div>
 
                   <div>
-                    <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1.5">
-                      N° Transaction Opérateur (SMS/Reçu) *
+                    <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1.5">
+                      N° Trans. Opérateur (SMS/Reçu) *
                     </label>
                     <input
                       type="text"
                       required
-                      placeholder="ex: MP240912.1450"
+                      placeholder="Ex: MP240912.1450"
                       value={operatorTxNum}
                       onChange={e => setOperatorTxNum(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 text-white text-xs px-3.5 py-2.5 focus:outline-none focus:border-orange-500 font-mono"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-none text-slate-800 text-xs px-3.5 py-2.5 focus:outline-none focus:border-orange-500 font-mono font-bold"
                     />
                   </div>
                 </div>
 
                 {/* Motif */}
                 <div>
-                  <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1.5">
+                  <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1.5">
                     Motif de la transaction *
                   </label>
                   <textarea
                     required
                     rows={2}
-                    placeholder="ex: Dépôt pour achat crédit d'appel / Retrait pour urgence..."
+                    placeholder="Ex: Dépôt pour achat crédit d'appel / Retrait pour urgence..."
                     value={reason}
                     onChange={e => setReason(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 text-white text-xs p-3 focus:outline-none focus:border-orange-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-none text-slate-800 text-xs p-3 focus:outline-none focus:border-orange-500 font-medium"
                   />
                 </div>
 
                 {/* Actions */}
-                <div className="pt-3 border-t border-slate-800 flex justify-end gap-3">
+                <div className="pt-3 border-t border-slate-200 flex justify-end gap-3">
                   <button
                     type="button"
                     onClick={() => setShowModal(false)}
-                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold uppercase tracking-wider transition cursor-pointer"
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-none transition cursor-pointer border border-slate-200"
                   >
                     Annuler
                   </button>
@@ -666,7 +677,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold uppercase tracking-wider transition shadow-lg shadow-orange-500/20 cursor-pointer disabled:opacity-50"
+                    className="px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold uppercase tracking-wider rounded-none transition shadow-none cursor-pointer disabled:opacity-50"
                   >
                     {isSubmitting ? 'Enregistrement...' : 'Valider la Transaction'}
                   </button>

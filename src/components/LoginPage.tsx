@@ -173,8 +173,12 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       >
         {/* Brand Logo & Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-500 text-white font-black text-3xl mb-4 shadow-lg shadow-orange-500/20">
-            A
+          <div className="inline-flex items-center justify-center p-2.5 bg-white rounded-none mb-4 shadow-xl border border-slate-700/60">
+            <img
+              src="/logo_alimobile.jpeg"
+              alt="Ali Mobile Logo"
+              className="w-16 h-16 object-contain"
+            />
           </div>
           <h1 className="text-2xl font-black text-white uppercase italic tracking-tight font-display">
             Ali Mobile

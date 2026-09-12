@@ -46,7 +46,8 @@ import {
   Check,
   Copy,
   MapPin,
-  ExternalLink
+  ExternalLink,
+  Pencil
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -129,6 +130,13 @@ export default function App() {
   const [manualPasswordInput, setManualPasswordInput] = useState('');
   const [deleteAgentConfirm, setDeleteAgentConfirm] = useState<Agent | null>(null);
   const [isProcessingUserAction, setIsProcessingUserAction] = useState(false);
+
+  // Self-profile editing state (current logged-in user)
+  const [selfEditMode, setSelfEditMode] = useState(false);
+  const [selfEditName, setSelfEditName] = useState('');
+  const [selfEditPhone, setSelfEditPhone] = useState('');
+  const [selfEditCity, setSelfEditCity] = useState('');
+  const [isSavingSelfProfile, setIsSavingSelfProfile] = useState(false);
 
   // New Contract Form State
   const [formStep, setFormStep] = useState(1);
@@ -587,6 +595,28 @@ export default function App() {
       showToast(err.message || "Erreur lors de la mise à jour", "error");
     } finally {
       setIsProcessingUserAction(false);
+    }
+  };
+
+  // Save self-profile (current logged-in user edits own info)
+  const handleSaveSelfProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    try {
+      setIsSavingSelfProfile(true);
+      await supabaseDB.updateAgent(currentUser.id, {
+        name: selfEditName.trim(),
+        phone: selfEditPhone.trim(),
+        city: selfEditCity,
+      });
+      showToast('Profil mis à jour avec succès.');
+      setSelfEditMode(false);
+      if (session?.user?.id) await fetchCurrentUser(session.user.id);
+      await refreshData();
+    } catch (err: any) {
+      showToast(err.message || 'Erreur lors de la mise à jour du profil', 'error');
+    } finally {
+      setIsSavingSelfProfile(false);
     }
   };
 
@@ -1135,7 +1165,9 @@ export default function App() {
 
         <div className="p-6 flex items-center justify-between border-b border-slate-800/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-500 rounded-none flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-orange-500/20">A</div>
+            <div className="w-10 h-10 bg-white border border-slate-700 flex items-center justify-center p-0.5 shrink-0">
+                <img src="/logo_alimobile.jpeg" alt="Ali Mobile" className="w-full h-full object-contain" />
+              </div>
             <span className="text-white font-bold text-xl tracking-tight">Ali Mobile</span>
           </div>
           {/* Close button on mobile */}
@@ -1238,7 +1270,9 @@ export default function App() {
             onClick={() => setIsMobileSidebarOpen(true)}
             className="flex md:hidden items-center gap-3 cursor-pointer group hover:opacity-80 transition select-none"
           >
-            <div className="w-9 h-9 bg-orange-500 rounded-none flex items-center justify-center text-white font-bold text-lg shadow-md shadow-orange-500/20">A</div>
+            <div className="w-9 h-9 bg-white border border-slate-200 flex items-center justify-center p-0.5 shrink-0">
+                <img src="/logo_alimobile.jpeg" alt="Ali Mobile" className="w-full h-full object-contain" />
+              </div>
             <span className="text-slate-900 font-bold text-sm tracking-tight uppercase">Ali Mobile</span>
             <Menu className="w-5 h-5 text-slate-500 ml-1 group-hover:text-orange-500 transition" />
           </div>
@@ -2790,14 +2824,14 @@ export default function App() {
 
           {/* Settings / Configuration Tab */}
           {activeTab === 'settings' && (
-            <div className="no-print space-y-8 max-w-6xl mx-auto w-full animate-fadeIn pb-12">
+            <div className="no-print space-y-6 max-w-6xl mx-auto w-full animate-fadeIn pb-12">
               <div className="border-b border-slate-200 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <h1 className="text-2xl font-black text-slate-900 tracking-tight font-display uppercase italic flex items-center">
                     <Settings className="w-6 h-6 mr-2 text-orange-500" />
                     <span>Paramètres & Administration</span>
                   </h1>
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-slate-500 mt-1 font-mono">
                     Gestion des utilisateurs, attribution des rôles, sécurité des accès et diagnostic système.
                   </p>
                 </div>
@@ -2805,7 +2839,7 @@ export default function App() {
                 {currentUser?.role === 'admin' && (
                   <button
                     onClick={() => setShowCreateUserModal(true)}
-                    className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center space-x-2 cursor-pointer shadow-md shadow-orange-500/20 shrink-0 self-start md:self-auto"
+                    className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 px-4 rounded-none text-xs uppercase tracking-wider transition flex items-center space-x-2 cursor-pointer shadow-none shrink-0 self-start md:self-auto"
                   >
                     <UserPlus className="w-4 h-4" />
                     <span>+ Nouvel Utilisateur</span>
@@ -2815,14 +2849,14 @@ export default function App() {
 
               {/* SECTION 1: User Management (Admin Only) */}
               {currentUser?.role === 'admin' ? (
-                <div className="bg-white border border-slate-150 shadow-sm rounded-3xl overflow-hidden">
-                  <div className="p-6 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50/50">
+                <div className="bg-white border border-slate-200 shadow-sm rounded-none overflow-hidden">
+                  <div className="p-4 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50/50">
                     <div>
-                      <h3 className="text-base font-black text-slate-900 uppercase font-display tracking-tight flex items-center">
+                      <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider font-display flex items-center">
                         <Users className="w-4 h-4 mr-2 text-orange-500" />
                         <span>Gestion des Comptes Utilisateurs & Rôles</span>
                       </h3>
-                      <p className="text-xs text-slate-500 mt-0.5">
+                      <p className="text-[11px] text-slate-400 mt-0.5 font-mono">
                         Attribuez des rôles (Admin, Opérateur, Agent), réinitialisez les mots de passe et gérez les accès.
                       </p>
                     </div>
@@ -2836,13 +2870,13 @@ export default function App() {
                           value={userSearchTerm}
                           onChange={(e) => setUserSearchTerm(e.target.value)}
                           placeholder="Rechercher nom, email, code, ville..."
-                          className="pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 w-full sm:w-56"
+                          className="pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-none focus:outline-none focus:border-orange-500 w-full sm:w-56 font-medium text-slate-800 placeholder:text-slate-400"
                         />
                       </div>
                       <select
                         value={userRoleFilter}
                         onChange={(e) => setUserRoleFilter(e.target.value as any)}
-                        className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-orange-500 font-semibold cursor-pointer"
+                        className="text-xs bg-white border border-slate-200 rounded-none px-3 py-1.5 focus:outline-none focus:border-orange-500 font-bold text-slate-700 cursor-pointer"
                       >
                         <option value="all">Tous les rôles ({agents.length})</option>
                         <option value="admin">Administrateurs ({agents.filter(a => a.role === 'admin').length})</option>
@@ -2854,9 +2888,9 @@ export default function App() {
 
                   {/* Users Table */}
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs text-slate-500">
+                    <table className="w-full text-left text-xs text-slate-600 border-collapse">
                       <thead>
-                        <tr className="border-b border-slate-150 text-slate-400 uppercase tracking-wider text-[10px] font-bold font-display bg-slate-50/70">
+                        <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-[10px] font-bold font-display bg-slate-50/70">
                           <th className="py-3 px-4">Utilisateur / Identifiant</th>
                           <th className="py-3 px-4">Contact</th>
                           <th className="py-3 px-4">Ville</th>
@@ -2890,9 +2924,9 @@ export default function App() {
 
                             return (
                               <tr key={agent.id} className="hover:bg-slate-50/80 transition">
-                                <td className="py-3.5 px-4">
+                                <td className="py-3 px-4">
                                   <div className="flex items-center space-x-3">
-                                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs uppercase text-white shadow-sm ${
+                                    <div className={`w-8 h-8 rounded-none flex items-center justify-center font-bold text-xs uppercase text-white shadow-none ${
                                       role === 'admin' ? 'bg-gradient-to-tr from-orange-600 to-amber-500' :
                                       role === 'operator' ? 'bg-gradient-to-tr from-blue-600 to-indigo-500' :
                                       'bg-gradient-to-tr from-emerald-600 to-teal-500'
@@ -2903,39 +2937,39 @@ export default function App() {
                                       <div className="flex items-center space-x-1.5">
                                         <span className="font-bold text-slate-900">{agent.name}</span>
                                         {isCurrentUser && (
-                                          <span className="bg-slate-900 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                                          <span className="bg-slate-900 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-none">
                                             Vous
                                           </span>
                                         )}
                                       </div>
-                                      <span className="font-mono text-[11px] text-slate-500 font-semibold bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 inline-block mt-0.5">
+                                      <span className="font-mono text-[10px] text-slate-500 font-semibold bg-slate-100 px-1.5 py-0.5 rounded-none border border-slate-200 inline-block mt-0.5">
                                         {agent.code}
                                       </span>
                                     </div>
                                   </div>
                                 </td>
 
-                                <td className="py-3.5 px-4">
-                                  <div className="space-y-0.5">
-                                    <span className="font-mono text-slate-700 block">{agent.email}</span>
-                                    <span className="font-mono text-[11px] text-slate-400 block">{agent.phone}</span>
+                                <td className="py-3 px-4">
+                                  <div className="space-y-0.5 font-mono">
+                                    <span className="text-slate-800 font-medium block text-xs">{agent.email}</span>
+                                    <span className="text-[11px] text-slate-400 block">{agent.phone}</span>
                                   </div>
                                 </td>
 
-                                <td className="py-3.5 px-4">
-                                  <span className="inline-flex items-center text-slate-700 font-semibold bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg">
+                                <td className="py-3 px-4">
+                                  <span className="inline-flex items-center text-slate-700 font-semibold bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-none text-xs">
                                     <MapPin className="w-3 h-3 mr-1 text-orange-500" />
-                                    <span>{agent.city || 'Bukavu'}</span>
+                                    <span>{agent.city || 'Goma'}</span>
                                   </span>
                                 </td>
 
-                                <td className="py-3.5 px-4">
+                                <td className="py-3 px-4">
                                   <div className="flex items-center space-x-2">
                                     <select
                                       value={role}
                                       disabled={isCurrentUser || isProcessingUserAction}
                                       onChange={(e) => handleUpdateAgentRole(agent, e.target.value as any)}
-                                      className={`text-xs font-bold px-2.5 py-1.5 rounded-xl border transition cursor-pointer ${roleBadgeColor} ${
+                                      className={`text-xs font-bold px-2.5 py-1 rounded-none border transition cursor-pointer ${roleBadgeColor} ${
                                         isCurrentUser ? 'opacity-80 cursor-not-allowed' : 'hover:border-slate-400 focus:outline-none focus:ring-1 focus:ring-orange-500'
                                       }`}
                                       title={isCurrentUser ? "Vous ne pouvez pas modifier votre propre rôle" : "Changer le rôle"}
@@ -2947,41 +2981,41 @@ export default function App() {
                                   </div>
                                 </td>
 
-                                <td className="py-3.5 px-4 text-center">
+                                <td className="py-3 px-4 text-center">
                                   <button
                                     type="button"
                                     onClick={() => setResetPasswordAgent(agent)}
-                                    className="inline-flex items-center space-x-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition cursor-pointer"
+                                    className="inline-flex items-center space-x-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-1.5 rounded-none text-[11px] font-bold uppercase tracking-wider transition cursor-pointer"
                                     title="Réinitialiser ou envoyer le lien de mot de passe"
                                   >
-                                    <Key className="w-3.5 h-3.5 text-amber-600" />
+                                    <Key className="w-3.5 h-3.5 text-slate-500" />
                                     <span>Gérer le mot de passe</span>
                                   </button>
                                 </td>
 
-                                <td className="py-3.5 px-4 text-right">
-                                  <div className="flex items-center justify-end space-x-1.5">
+                                <td className="py-3 px-4 text-right">
+                                  <div className="flex items-center justify-end space-x-1">
                                     <button
                                       type="button"
                                       onClick={() => handleOpenEditAgent(agent)}
-                                      className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                                      className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-none transition cursor-pointer border border-transparent hover:border-slate-200"
                                       title="Modifier les coordonnées"
                                     >
-                                      <Edit3 className="w-4 h-4" />
+                                      <Edit3 className="w-3.5 h-3.5" />
                                     </button>
 
                                     <button
                                       type="button"
                                       disabled={isCurrentUser || isProcessingUserAction}
                                       onClick={() => setDeleteAgentConfirm(agent)}
-                                      className={`p-1.5 rounded-lg transition ${
+                                      className={`p-1.5 rounded-none transition border border-transparent ${
                                         isCurrentUser
                                           ? 'text-slate-200 cursor-not-allowed'
-                                          : 'text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer'
+                                          : 'text-red-500 hover:text-red-700 hover:bg-red-50 hover:border-red-100 cursor-pointer'
                                       }`}
                                       title={isCurrentUser ? "Impossible de supprimer votre propre compte" : "Supprimer l'utilisateur"}
                                     >
-                                      <Trash2 className="w-4 h-4" />
+                                      <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                   </div>
                                 </td>
@@ -2993,9 +3027,9 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 text-center text-slate-500 space-y-2 text-xs">
+                <div className="bg-slate-50 border border-slate-200 rounded-none p-6 text-center text-slate-500 space-y-2 text-xs">
                   <ShieldAlert className="w-8 h-8 text-slate-300 mx-auto" />
-                  <p className="font-bold text-slate-700">Privilèges restreints</p>
+                  <p className="font-bold text-slate-700 uppercase tracking-wider">Privilèges restreints</p>
                   <p className="max-w-md mx-auto">
                     La gestion des utilisateurs, l'attribution des rôles et la réinitialisation des mots de passe sont réservées aux administrateurs.
                   </p>
@@ -3005,49 +3039,49 @@ export default function App() {
               {/* SECTION 2: Knox integration diagnostics & DB reset */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Knox integration diagnostics */}
-                <div className="bg-white border border-slate-150 shadow-sm rounded-3xl p-6 space-y-4">
-                  <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider font-display flex items-center">
+                <div className="bg-white border border-slate-200 shadow-sm rounded-none p-5 space-y-4">
+                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider font-display flex items-center">
                     <Database className="w-4 h-4 mr-2 text-orange-500" />
                     <span>État de l'intégration Samsung Knox API</span>
                   </h4>
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-150 text-xs space-y-3">
+                  <div className="bg-slate-50 p-4 rounded-none border border-slate-200 text-xs space-y-3 font-mono">
                     <div className="flex justify-between items-center">
                       <span className="text-slate-500 font-medium">Statut du serveur de licence :</span>
-                      <span className="text-emerald-600 font-bold flex items-center space-x-1.5 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                      <span className="text-emerald-700 font-bold flex items-center space-x-1.5 bg-emerald-50 px-2 py-0.5 rounded-none border border-emerald-200 text-[10px]">
+                        <span className="w-2 h-2 rounded-none bg-emerald-500 inline-block animate-pulse"></span>
                         <span>OPÉRATIONNEL (CLOUD)</span>
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-slate-500 font-medium">Version du SDK Ali Knox Controller :</span>
-                      <span className="font-mono text-slate-700 font-bold">v4.18.26-Bukavu</span>
+                      <span className="font-mono text-slate-800 font-bold">v4.18.26-GOMA</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-slate-500 font-medium">Rapprochement Mobile Money :</span>
-                      <span className="text-orange-600 font-semibold font-mono">M-Pesa, Airtel Money, Orange Money (LIVE)</span>
+                      <span className="text-orange-600 font-semibold font-mono text-[11px]">M-Pesa, Airtel Money, Orange Money (LIVE)</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Database Reset Action */}
-                <div className="bg-white border border-slate-150 shadow-sm rounded-3xl p-6 space-y-4">
+                <div className="bg-white border border-slate-200 shadow-sm rounded-none p-5 space-y-4">
                   <h4 className="text-xs font-bold text-red-600 uppercase tracking-wider font-display">
                     Zone de Danger
                   </h4>
                   <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                    La réinitialisation de la base de données effacera tous les clients, contrats et paiements créés par vos agents au cours de cette session de simulation, et restaurera le jeu de données d'origine d'Ali Mobile Bukavu.
+                    La réinitialisation de la base de données effacera tous les clients, contrats et paiements créés par vos agents au cours de cette session de simulation, et restaurera le jeu de données d'origine d'Ali Mobile Goma.
                   </p>
 
                   {!showResetConfirm ? (
                     <button
                       onClick={() => setShowResetConfirm(true)}
-                      className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-150 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center space-x-2 cursor-pointer"
+                      className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 py-2.5 px-4 rounded-none text-xs font-bold uppercase tracking-wider transition flex items-center space-x-2 cursor-pointer shadow-none"
                     >
                       <RefreshCw className="w-4 h-4" />
                       <span>Réinitialiser la Base de Données</span>
                     </button>
                   ) : (
-                    <div className="bg-red-50 border border-red-200 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
+                    <div className="bg-red-50 border border-red-200 p-4 rounded-none flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
                       <div>
                         <p className="text-xs font-bold text-red-800">Êtes-vous sûr à 100% ?</p>
                         <p className="text-[11px] text-red-600">Cette action restaurera les données d'exemple d'origine d'Ali Mobile.</p>
@@ -3059,14 +3093,14 @@ export default function App() {
                             handleResetDB();
                             setShowResetConfirm(false);
                           }}
-                          className="bg-red-600 hover:bg-red-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
+                          className="bg-red-600 hover:bg-red-700 text-white px-3.5 py-1.5 rounded-none text-xs font-bold uppercase tracking-wider transition cursor-pointer"
                         >
                           Oui, réinitialiser
                         </button>
                         <button
                           type="button"
                           onClick={() => setShowResetConfirm(false)}
-                          className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
+                          className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3.5 py-1.5 rounded-none text-xs font-bold uppercase tracking-wider transition cursor-pointer"
                         >
                           Annuler
                         </button>
@@ -3092,50 +3126,131 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                 {/* Profile Card Left */}
-                <div className="bg-white border border-slate-100 shadow-sm rounded-3xl p-6 space-y-6 flex flex-col items-center text-center">
-                  {/* Profile avatar: initials from currentUser if admin, else from the selected agent */}
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-orange-500 to-amber-400 text-white flex items-center justify-center font-bold text-3xl uppercase shadow-lg shadow-orange-500/10">
+                <div className="bg-white border border-slate-200 shadow-sm rounded-none p-6 space-y-5 flex flex-col items-center text-center">
+                  {/* Avatar initials */}
+                  <div className="w-20 h-20 rounded-none bg-gradient-to-tr from-orange-500 to-amber-400 text-white flex items-center justify-center font-bold text-2xl uppercase shadow-md">
                     {activeAgentId === 'admin'
                       ? (currentUser?.name?.split(' ').map(n => n[0]).join('') || 'AD')
                       : agents.find(a => a.id === activeAgentId)?.name?.split(' ').map(n => n[0]).join('') || 'AG'}
                   </div>
 
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900 tracking-tight">
-                      {activeAgentId === 'admin' ? (currentUser?.name || 'Administrateur') : agents.find(a => a.id === activeAgentId)?.name}
-                    </h3>
-                    <span className="inline-block mt-1 px-3 py-1 bg-orange-50 border border-orange-100 text-orange-600 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                      {activeAgentId === 'admin' ? 'Administrateur Principal' : 'Agent de Vente Agréé'}
-                    </span>
-                  </div>
+                  {!selfEditMode ? (
+                    <>
+                      <div>
+                        <h3 className="text-base font-black text-slate-900 tracking-tight uppercase">
+                          {activeAgentId === 'admin' ? (currentUser?.name || 'Administrateur') : agents.find(a => a.id === activeAgentId)?.name}
+                        </h3>
+                        <span className="inline-block mt-1 px-3 py-1 bg-orange-50 border border-orange-200 text-orange-600 rounded-none text-[10px] font-bold uppercase tracking-wider">
+                          {activeAgentId === 'admin' ? 'Administrateur' : (agents.find(a => a.id === activeAgentId)?.role === 'operator' ? 'Opérateur' : 'Agent de Vente')}
+                        </span>
+                      </div>
 
-                  <div className="w-full border-t border-slate-100 pt-4 space-y-2 text-xs text-left">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-medium">Adresse Email :</span>
-                      <span className="text-slate-800 font-bold font-mono">
-                        {activeAgentId === 'admin' ? (currentUser?.email || '—') : agents.find(a => a.id === activeAgentId)?.email}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-medium">Téléphone :</span>
-                      <span className="text-slate-800 font-bold font-mono">
-                        {activeAgentId === 'admin' ? (currentUser?.phone || '—') : agents.find(a => a.id === activeAgentId)?.phone}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-medium">Code Identifiant :</span>
-                      <span className="text-slate-800 font-bold font-mono">
-                        {activeAgentId === 'admin' ? (currentUser?.code || '—') : agents.find(a => a.id === activeAgentId)?.code}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-medium">Ville d'affectation :</span>
-                      <span className="text-slate-800 font-bold">
-                        {activeAgentId === 'admin' ? (currentUser?.city || 'Bukavu') : (agents.find(a => a.id === activeAgentId)?.city || 'Bukavu')}, RDC
-                      </span>
-                    </div>
-                  </div>
+                      <div className="w-full border-t border-slate-100 pt-4 space-y-2.5 text-xs text-left">
+                        <div className="flex justify-between gap-2">
+                          <span className="text-slate-400 font-medium shrink-0">Email :</span>
+                          <span className="text-slate-800 font-bold font-mono text-right truncate">
+                            {activeAgentId === 'admin' ? (currentUser?.email || '—') : agents.find(a => a.id === activeAgentId)?.email}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-slate-400 font-medium shrink-0">Téléphone :</span>
+                          <span className="text-slate-800 font-bold font-mono">
+                            {activeAgentId === 'admin' ? (currentUser?.phone || '—') : agents.find(a => a.id === activeAgentId)?.phone}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-slate-400 font-medium shrink-0">Code ID :</span>
+                          <span className="text-slate-800 font-bold font-mono">
+                            {activeAgentId === 'admin' ? (currentUser?.code || '—') : agents.find(a => a.id === activeAgentId)?.code}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-slate-400 font-medium shrink-0">Ville :</span>
+                          <span className="text-slate-800 font-bold">
+                            {activeAgentId === 'admin' ? (currentUser?.city || 'Bukavu') : (agents.find(a => a.id === activeAgentId)?.city || 'Bukavu')}, RDC
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Edit button — only for the currently logged-in user's own card */}
+                      {activeAgentId === 'admin' && (
+                        <button
+                          onClick={() => {
+                            setSelfEditName(currentUser?.name || '');
+                            setSelfEditPhone(currentUser?.phone || '');
+                            setSelfEditCity(currentUser?.city || 'Bukavu');
+                            setSelfEditMode(true);
+                          }}
+                          className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-orange-500 text-white text-xs font-bold uppercase tracking-wider py-2.5 px-4 rounded-none transition-colors"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          Modifier mon profil
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    /* Self-edit form */
+                    <form onSubmit={handleSaveSelfProfile} className="w-full space-y-3 text-left">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-orange-500 text-center border-b border-slate-100 pb-2">
+                        Modifier mes informations
+                      </p>
+
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Nom complet</label>
+                        <input
+                          type="text"
+                          value={selfEditName}
+                          onChange={e => setSelfEditName(e.target.value)}
+                          required
+                          placeholder="Votre nom complet"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-none px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Téléphone</label>
+                        <input
+                          type="tel"
+                          value={selfEditPhone}
+                          onChange={e => setSelfEditPhone(e.target.value)}
+                          placeholder="+243..."
+                          className="w-full bg-slate-50 border border-slate-200 rounded-none px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Ville</label>
+                        <select
+                          value={selfEditCity}
+                          onChange={e => setSelfEditCity(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-none px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400"
+                        >
+                          {['Bukavu', 'Goma', 'Kinshasa', 'Beni', 'Butembo'].map(c => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          type="submit"
+                          disabled={isSavingSelfProfile}
+                          className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider py-2.5 rounded-none transition-colors"
+                        >
+                          {isSavingSelfProfile ? 'Sauvegarde…' : 'Enregistrer'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelfEditMode(false)}
+                          className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider py-2.5 rounded-none transition-colors"
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    </form>
+                  )}
                 </div>
+
 
                 {/* Profile Stats & Subordinates/Agents creation Right */}
                 <div className="lg:col-span-2 space-y-6">
@@ -3500,9 +3615,9 @@ export default function App() {
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-white border border-slate-100 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+                  className="bg-white border border-slate-200 rounded-none w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
                 >
-                  <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
+                  <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
                     <div className="flex items-center space-x-2">
                       <UserPlus className="w-5 h-5 text-orange-500" />
                       <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider font-display">
@@ -3511,7 +3626,7 @@ export default function App() {
                     </div>
                     <button
                       onClick={() => setShowCreateUserModal(false)}
-                      className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                      className="text-slate-400 hover:text-slate-600 p-1.5 rounded-none hover:bg-slate-100 transition cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -3533,7 +3648,7 @@ export default function App() {
                             key={r.id}
                             type="button"
                             onClick={() => setNewUserRole(r.id as any)}
-                            className={`p-3 rounded-2xl border text-left transition cursor-pointer ${
+                            className={`p-3 rounded-none border text-left transition cursor-pointer ${
                               newUserRole === r.id
                                 ? 'border-orange-500 bg-orange-50/60 ring-1 ring-orange-500'
                                 : 'border-slate-200 hover:bg-slate-50 bg-white'
@@ -3553,7 +3668,7 @@ export default function App() {
                           <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500">
                             Code ID Unique
                           </label>
-                          <span className="text-[9px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">
+                          <span className="text-[9px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded-none border border-emerald-200">
                             Généré automatiquement
                           </span>
                         </div>
@@ -3563,7 +3678,7 @@ export default function App() {
                           value={newUserCode}
                           onChange={(e) => setNewUserCode(e.target.value)}
                           placeholder="Ex: AG-243-04"
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
                         />
                         <p className="text-[10px] text-slate-400 mt-1">Code interne attribué à l'employé.</p>
                       </div>
@@ -3578,7 +3693,7 @@ export default function App() {
                           value={newUserCity}
                           onChange={(e) => setNewUserCity(e.target.value)}
                           placeholder="Ex: Goma, Bukavu, Kinshasa..."
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
                         />
                         <div className="flex gap-1.5 mt-1.5 flex-wrap">
                           {['Goma', 'Bukavu', 'Kinshasa', 'Beni', 'Butembo'].map(city => (
@@ -3586,7 +3701,7 @@ export default function App() {
                               key={city}
                               type="button"
                               onClick={() => setNewUserCity(city)}
-                              className={`text-[9px] font-bold px-2 py-0.5 rounded-lg border cursor-pointer transition ${
+                              className={`text-[9px] font-bold px-2 py-0.5 rounded-none border cursor-pointer transition ${
                                 newUserCity === city ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-slate-50 text-slate-500 border-slate-200'
                               }`}
                             >
@@ -3609,7 +3724,7 @@ export default function App() {
                           value={newUserName}
                           onChange={(e) => setNewUserName(e.target.value)}
                           placeholder="Ex: Patrick Kasereka"
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
                         />
                       </div>
 
@@ -3623,7 +3738,7 @@ export default function App() {
                           value={newUserEmail}
                           onChange={(e) => setNewUserEmail(e.target.value)}
                           placeholder="Ex: p.kasereka@alimobile.com"
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono"
                         />
                       </div>
                     </div>
@@ -3639,12 +3754,12 @@ export default function App() {
                         value={newUserPhone}
                         onChange={(e) => setNewUserPhone(e.target.value)}
                         placeholder="Ex: +243 970 000 000"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
                       />
                     </div>
 
                     {/* Password Options */}
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                    <div className="bg-slate-50 p-4 rounded-none border border-slate-200 space-y-3">
                       <label className="text-[10px] uppercase font-bold tracking-wider text-slate-700 block">
                         Configuration du mot de passe
                       </label>
@@ -3697,7 +3812,7 @@ export default function App() {
                             value={newUserPassword}
                             onChange={(e) => setNewUserPassword(e.target.value)}
                             placeholder="Entrez un mot de passe temporaire..."
-                            className="w-full bg-white border border-slate-200 rounded-xl text-xs px-3 py-2 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
+                            className="w-full bg-white border border-slate-200 rounded-none text-xs px-3 py-2 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
                           />
                         </div>
                       )}
@@ -3708,14 +3823,14 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => setShowCreateUserModal(false)}
-                        className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                        className="px-4 py-2 rounded-none text-xs font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-100 transition cursor-pointer"
                       >
                         Annuler
                       </button>
                       <button
                         type="submit"
                         disabled={isProcessingUserAction}
-                        className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 px-6 rounded-xl text-xs transition flex items-center space-x-2 cursor-pointer shadow-md shadow-orange-500/20 disabled:opacity-50"
+                        className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 px-6 rounded-none text-xs uppercase tracking-wider transition flex items-center space-x-2 cursor-pointer shadow-none disabled:opacity-50"
                       >
                         {isProcessingUserAction ? (
                           <>
@@ -3742,10 +3857,10 @@ export default function App() {
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-white border border-slate-100 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl p-6 space-y-4"
+                  className="bg-white border border-slate-200 rounded-none w-full max-w-lg overflow-hidden shadow-2xl p-6 space-y-4"
                 >
                   <div className="flex items-center space-x-3 text-emerald-600">
-                    <div className="w-10 h-10 bg-emerald-50 rounded-2xl flex items-center justify-center">
+                    <div className="w-10 h-10 bg-emerald-50 rounded-none border border-emerald-200 flex items-center justify-center">
                       <Check className="w-6 h-6 text-emerald-600" />
                     </div>
                     <div>
@@ -3758,8 +3873,8 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3 text-xs">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  <div className="bg-slate-50 p-4 rounded-none border border-slate-200 space-y-3 text-xs">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
                       Lien direct pour renseigner le mot de passe
                     </span>
                     <p className="text-slate-600 leading-relaxed text-[11px]">
@@ -3770,7 +3885,7 @@ export default function App() {
                         type="text"
                         readOnly
                         value={createdUserDirectLink.link}
-                        className="flex-grow bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-700 select-all"
+                        className="flex-grow bg-white border border-slate-200 rounded-none px-3 py-2 text-xs font-mono text-slate-700 select-all"
                       />
                       <button
                         type="button"
@@ -3779,7 +3894,7 @@ export default function App() {
                           setCopiedLink(true);
                           setTimeout(() => setCopiedLink(false), 2000);
                         }}
-                        className="bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 px-3 py-2 rounded-xl font-bold flex items-center space-x-1 transition cursor-pointer"
+                        className="bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 px-3 py-2 rounded-none font-bold text-xs uppercase tracking-wider flex items-center space-x-1 transition cursor-pointer"
                       >
                         {copiedLink ? (
                           <>
@@ -3796,7 +3911,7 @@ export default function App() {
                     </div>
 
                     {createdUserDirectLink.tempPass && (
-                      <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 font-mono text-xs">
+                      <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-none text-amber-800 font-mono text-xs">
                         Mot de passe temporaire défini : <span className="font-bold">{createdUserDirectLink.tempPass}</span>
                       </div>
                     )}
@@ -3807,7 +3922,7 @@ export default function App() {
                       href={createdUserDirectLink.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs text-orange-600 hover:text-orange-700 font-bold flex items-center space-x-1 cursor-pointer"
+                      className="text-xs text-orange-600 hover:text-orange-700 font-bold flex items-center space-x-1 cursor-pointer uppercase tracking-wider"
                     >
                       <span>Ouvrir la page de configuration</span>
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -3816,7 +3931,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setCreatedUserDirectLink(null)}
-                      className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 px-5 rounded-xl text-xs transition cursor-pointer"
+                      className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 px-5 rounded-none text-xs uppercase tracking-wider transition cursor-pointer"
                     >
                       Terminé
                     </button>
@@ -3832,9 +3947,9 @@ export default function App() {
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-white border border-slate-100 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-5"
+                  className="bg-white border border-slate-200 rounded-none w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-5"
                 >
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                  <div className="flex justify-between items-center border-b border-slate-200 pb-3">
                     <div className="flex items-center space-x-2">
                       <Key className="w-5 h-5 text-amber-500" />
                       <h3 className="text-sm font-black text-slate-900 uppercase font-display tracking-tight">
@@ -3846,7 +3961,7 @@ export default function App() {
                         setResetPasswordAgent(null);
                         setManualPasswordInput('');
                       }}
-                      className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                      className="text-slate-400 hover:text-slate-600 p-1.5 rounded-none hover:bg-slate-100 transition cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -3854,7 +3969,7 @@ export default function App() {
 
                   <div className="space-y-4 text-xs">
                     {/* Option 1: Trigger Reset Email */}
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                    <div className="p-4 bg-slate-50 rounded-none border border-slate-200 space-y-2">
                       <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block">
                         Option 1 : Email de Réinitialisation
                       </span>
@@ -3865,7 +3980,7 @@ export default function App() {
                         type="button"
                         disabled={isProcessingUserAction}
                         onClick={() => handleSendResetPasswordEmail(resetPasswordAgent)}
-                        className="w-full bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 py-2 px-3 rounded-xl font-bold flex items-center justify-center space-x-2 transition cursor-pointer"
+                        className="w-full bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 py-2.5 px-3 rounded-none font-bold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition cursor-pointer"
                       >
                         <Send className="w-3.5 h-3.5" />
                         <span>Envoyer l'email à {resetPasswordAgent.email}</span>
@@ -3873,7 +3988,7 @@ export default function App() {
                     </div>
 
                     {/* Option 2: Direct set password */}
-                    <form onSubmit={handleDirectSetPassword} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                    <form onSubmit={handleDirectSetPassword} className="p-4 bg-slate-50 rounded-none border border-slate-200 space-y-3">
                       <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block">
                         Option 2 : Définir un nouveau mot de passe directement
                       </span>
@@ -3885,12 +4000,12 @@ export default function App() {
                         value={manualPasswordInput}
                         onChange={(e) => setManualPasswordInput(e.target.value)}
                         placeholder="Nouveau mot de passe (min 6 caractères)..."
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-orange-500"
+                        className="w-full bg-white border border-slate-200 rounded-none px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-orange-500"
                       />
                       <button
                         type="submit"
                         disabled={isProcessingUserAction || manualPasswordInput.length < 6}
-                        className="w-full bg-slate-900 hover:bg-slate-800 text-white py-2 px-3 rounded-xl font-bold flex items-center justify-center space-x-2 transition cursor-pointer disabled:opacity-50"
+                        className="w-full bg-slate-900 hover:bg-slate-800 text-white py-2.5 px-3 rounded-none font-bold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition cursor-pointer disabled:opacity-50"
                       >
                         <Key className="w-3.5 h-3.5" />
                         <span>Enregistrer le nouveau mot de passe</span>
@@ -3905,7 +4020,7 @@ export default function App() {
                         setResetPasswordAgent(null);
                         setManualPasswordInput('');
                       }}
-                      className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                      className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 hover:bg-slate-100 rounded-none transition cursor-pointer"
                     >
                       Fermer
                     </button>
@@ -3921,9 +4036,9 @@ export default function App() {
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-white border border-slate-100 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4"
+                  className="bg-white border border-slate-200 rounded-none w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4"
                 >
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                  <div className="flex justify-between items-center border-b border-slate-200 pb-3">
                     <div className="flex items-center space-x-2">
                       <Edit3 className="w-5 h-5 text-orange-500" />
                       <h3 className="text-sm font-black text-slate-900 uppercase font-display tracking-tight">
@@ -3932,7 +4047,7 @@ export default function App() {
                     </div>
                     <button
                       onClick={() => setEditingAgent(null)}
-                      className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+                      className="text-slate-400 hover:text-slate-600 p-1.5 rounded-none hover:bg-slate-100 transition cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -3948,7 +4063,7 @@ export default function App() {
                         required
                         value={editAgentName}
                         onChange={(e) => setEditAgentName(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
                       />
                     </div>
 
@@ -3961,7 +4076,7 @@ export default function App() {
                         required
                         value={editAgentPhone}
                         onChange={(e) => setEditAgentPhone(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
                       />
                     </div>
 
@@ -3974,7 +4089,7 @@ export default function App() {
                         required
                         value={editAgentCity}
                         onChange={(e) => setEditAgentCity(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
                       />
                     </div>
 
@@ -3986,7 +4101,7 @@ export default function App() {
                         value={editAgentRole}
                         disabled={editingAgent.id === currentUser?.id}
                         onChange={(e) => setEditAgentRole(e.target.value as any)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 font-bold cursor-pointer disabled:opacity-50"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 font-bold cursor-pointer disabled:opacity-50"
                       >
                         <option value="agent">Agent de Vente</option>
                         <option value="operator">Opérateur Utilités</option>
@@ -4001,14 +4116,14 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => setEditingAgent(null)}
-                        className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                        className="px-4 py-2 rounded-none text-xs font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-100 transition cursor-pointer"
                       >
                         Annuler
                       </button>
                       <button
                         type="submit"
                         disabled={isProcessingUserAction}
-                        className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-5 rounded-xl text-xs transition cursor-pointer shadow-md shadow-orange-500/20 disabled:opacity-50"
+                        className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 px-6 rounded-none text-xs uppercase tracking-wider transition cursor-pointer shadow-none disabled:opacity-50"
                       >
                         Enregistrer
                       </button>
@@ -4025,10 +4140,10 @@ export default function App() {
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-white border border-slate-100 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4"
+                  className="bg-white border border-slate-200 rounded-none w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4"
                 >
                   <div className="flex items-center space-x-3 text-red-600">
-                    <div className="w-10 h-10 bg-red-50 rounded-2xl flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 bg-red-50 rounded-none border border-red-200 flex items-center justify-center shrink-0">
                       <Trash2 className="w-5 h-5 text-red-600" />
                     </div>
                     <div>
@@ -4042,7 +4157,7 @@ export default function App() {
                   </div>
 
                   {contracts.some(c => c.agentId === deleteAgentConfirm.id) && (
-                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-2xl text-xs text-amber-800 space-y-1">
+                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-none text-xs text-amber-800 space-y-1">
                       <div className="flex items-center space-x-1.5 font-bold">
                         <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                         <span>Attention aux contrats liés</span>
@@ -4057,7 +4172,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setDeleteAgentConfirm(null)}
-                      className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                      className="px-4 py-2 rounded-none text-xs font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-100 transition cursor-pointer"
                     >
                       Annuler
                     </button>
@@ -4065,7 +4180,7 @@ export default function App() {
                       type="button"
                       disabled={isProcessingUserAction}
                       onClick={handleDeleteAgent}
-                      className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-5 rounded-xl text-xs transition cursor-pointer shadow-md shadow-red-500/20 disabled:opacity-50"
+                      className="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-6 rounded-none text-xs uppercase tracking-wider transition cursor-pointer shadow-none disabled:opacity-50"
                     >
                       {isProcessingUserAction ? 'Suppression...' : 'Supprimer Définitivement'}
                     </button>

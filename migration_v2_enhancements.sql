@@ -199,9 +199,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 9. MISE À JOUR DE LA POLITIQUE D'ÉCRITURE SUR AGENTS (POUR MODIFICATION DE RÔLES PAR ADMIN)
+-- 9. MISE À JOUR DE LA POLITIQUE D'ÉCRITURE SUR AGENTS (ADMINS ET UTILISATEURS POUR LEUR PROPRE PROFIL)
 DROP POLICY IF EXISTS "Allow write access to agents for admins only" ON public.agents;
-CREATE POLICY "Allow write access to agents for admins only"
+DROP POLICY IF EXISTS "Allow full access to agents for admins" ON public.agents;
+DROP POLICY IF EXISTS "Allow users to update their own profile" ON public.agents;
+
+-- Autoriser l'administrateur à gérer tous les agents (création, modification, suppression)
+CREATE POLICY "Allow full access to agents for admins"
 ON public.agents FOR ALL
 TO authenticated
 USING (
@@ -216,5 +220,17 @@ WITH CHECK (
         WHERE agents.id = auth.uid() AND agents.role = 'admin'
     )
 );
+
+-- Autoriser chaque employé connecté à modifier ses propres informations (nom, téléphone, ville)
+CREATE POLICY "Allow users to update their own profile"
+ON public.agents FOR UPDATE
+TO authenticated
+USING (
+    id = auth.uid()
+)
+WITH CHECK (
+    id = auth.uid()
+);
+
 
 

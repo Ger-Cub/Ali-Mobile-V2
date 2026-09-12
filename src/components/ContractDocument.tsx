@@ -180,6 +180,13 @@ export const ContractDocument: React.FC<ContractDocumentProps> = ({
       `}</style>
       {/* Header */}
       <div className="text-center mb-6 pb-6 border-b border-neutral-300">
+        <div className="flex items-center justify-center mb-3">
+          <img
+            src="/logo_alimobile.jpeg"
+            alt="Ali Mobile Logo"
+            className="h-16 w-auto object-contain"
+          />
+        </div>
         <h1 className="text-xl md:text-2xl font-bold font-display uppercase tracking-tight text-neutral-900">
           CONTRAT DE VENTE À CRÉDIT ET DE FINANCEMENT PARTICULIER – ALI MOBILE
         </h1>
