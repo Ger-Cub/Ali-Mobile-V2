@@ -316,3 +316,196 @@ INSERT INTO public.smartphones (brand, model, value_usd, imei) VALUES
 ('Samsung', 'Galaxy A55 5G', 450, '359012340123456'),
 ('Samsung', 'Galaxy S24 FE', 680, '357123990887221')
 ON CONFLICT (imei) DO NOTHING;
+
+
+--------------------------------------------------------------------------------
+-- MIGRATIONS FOR V2 ENHANCEMENTS (Ville agent, Rôle Operator, Transactions)
+--------------------------------------------------------------------------------
+
+-- 1. Ajouter la colonne city à public.agents
+ALTER TABLE public.agents ADD COLUMN IF NOT EXISTS city TEXT DEFAULT 'Bukavu';
+
+-- 2. Mettre à jour la contrainte de rôle pour inclure 'operator'
+ALTER TABLE public.agents DROP CONSTRAINT IF EXISTS agents_role_check;
+ALTER TABLE public.agents ADD CONSTRAINT agents_role_check 
+  CHECK (role IN ('admin', 'agent', 'operator'));
+
+-- 3. Mettre à jour la fonction create_agent_user pour prendre en compte la ville et le rôle operator
+CREATE OR REPLACE FUNCTION public.create_agent_user(
+  email TEXT,
+  password TEXT,
+  name TEXT,
+  phone TEXT,
+  code TEXT,
+  role TEXT,
+  city TEXT DEFAULT 'Bukavu'
+) RETURNS UUID AS $$
+DECLARE
+  new_user_id UUID;
+BEGIN
+  -- Check if caller is admin
+  IF auth.uid() IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.agents 
+    WHERE agents.id = auth.uid() AND agents.role = 'admin'
+  ) THEN
+    RAISE EXCEPTION 'Only Administrators can create subordinate agent accounts.';
+  END IF;
+
+  -- Insert into auth.users using Security Definer
+  INSERT INTO auth.users (
+    instance_id,
+    id,
+    aud,
+    role,
+    email,
+    encrypted_password,
+    email_confirmed_at,
+    recovery_sent_at,
+    last_sign_in_at,
+    raw_app_meta_data,
+    raw_user_meta_data,
+    created_at,
+    updated_at,
+    confirmation_token,
+    email_change,
+    email_change_token_new,
+    recovery_token
+  ) VALUES (
+    '00000000-0000-0000-0000-000000000000',
+    gen_random_uuid(),
+    'authenticated',
+    'authenticated',
+    email,
+    crypt(password, gen_salt('bf')),
+    now(),
+    now(),
+    now(),
+    '{"provider":"email","providers":["email"]}',
+    jsonb_build_object('name', name, 'role', role, 'code', code, 'phone', phone, 'city', city),
+    now(),
+    now(),
+    '',
+    '',
+    '',
+    ''
+  ) RETURNING id INTO new_user_id;
+
+  -- Insert into public.agents
+  INSERT INTO public.agents (
+    id,
+    name,
+    email,
+    phone,
+    code,
+    role,
+    city
+  ) VALUES (
+    new_user_id,
+    name,
+    email,
+    phone,
+    code,
+    role,
+    city
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    phone = EXCLUDED.phone,
+    code = EXCLUDED.code,
+    role = EXCLUDED.role,
+    city = EXCLUDED.city;
+
+  RETURN new_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 4. Table des Transactions de vente d'utilités (Airtel / Vodacom)
+CREATE TABLE IF NOT EXISTS public.transactions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_name TEXT NOT NULL,
+    transaction_type TEXT NOT NULL CHECK (transaction_type IN ('dépôt', 'retrait')),
+    phone_number TEXT NOT NULL,
+    amount NUMERIC NOT NULL,
+    operator TEXT NOT NULL CHECK (operator IN ('Airtel', 'Vodacom')),
+    operator_transaction_number TEXT NOT NULL,
+    reference_number TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    operator_id UUID NOT NULL REFERENCES public.agents(id) ON DELETE RESTRICT,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
+
+-- Politiques RLS pour transactions
+CREATE POLICY "Allow read transactions for all authenticated users"
+ON public.transactions FOR SELECT
+TO authenticated
+USING (true);
+
+CREATE POLICY "Allow insert transactions for authenticated operators and admins"
+ON public.transactions FOR INSERT
+TO authenticated
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM public.agents 
+        WHERE agents.id = auth.uid() AND agents.role IN ('admin', 'operator')
+    )
+);
+
+-- 7. Supprimer un utilisateur (admin seulement)
+CREATE OR REPLACE FUNCTION public.delete_agent_user(target_user_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  IF auth.uid() IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.agents 
+    WHERE agents.id = auth.uid() AND agents.role = 'admin'
+  ) THEN
+    RAISE EXCEPTION 'Seuls les administrateurs peuvent supprimer des utilisateurs.';
+  END IF;
+
+  IF auth.uid() IS NOT NULL AND auth.uid() = target_user_id THEN
+    RAISE EXCEPTION 'Vous ne pouvez pas supprimer votre propre compte administrateur.';
+  END IF;
+
+  DELETE FROM public.agents WHERE id = target_user_id;
+  DELETE FROM auth.users WHERE id = target_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 8. Modifier le mot de passe d'un employé par l'admin
+CREATE OR REPLACE FUNCTION public.set_agent_password(target_user_id UUID, new_password TEXT)
+RETURNS VOID AS $$
+BEGIN
+  IF auth.uid() IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.agents 
+    WHERE agents.id = auth.uid() AND agents.role = 'admin'
+  ) THEN
+    RAISE EXCEPTION 'Seuls les administrateurs peuvent modifier les mots de passe des employés.';
+  END IF;
+
+  UPDATE auth.users
+  SET encrypted_password = crypt(new_password, gen_salt('bf')),
+      updated_at = now()
+  WHERE id = target_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 9. Politique d'écriture sur agents pour admins (avec WITH CHECK pour updates)
+DROP POLICY IF EXISTS "Allow write access to agents for admins only" ON public.agents;
+CREATE POLICY "Allow write access to agents for admins only"
+ON public.agents FOR ALL
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1 FROM public.agents 
+        WHERE agents.id = auth.uid() AND agents.role = 'admin'
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM public.agents 
+        WHERE agents.id = auth.uid() AND agents.role = 'admin'
+    )
+);
+
+

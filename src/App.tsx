@@ -35,7 +35,19 @@ import {
   Image as ImageIcon,
   Trash2,
   LogOut,
-  Loader2
+  Loader2,
+  ArrowLeftRight,
+  AlertTriangle,
+  Mail,
+  Key,
+  Edit3,
+  Send,
+  ShieldCheck,
+  Check,
+  Copy,
+  MapPin,
+  ExternalLink,
+  Pencil
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -46,25 +58,31 @@ import {
   DelayRecord,
   Agent,
   USD_TO_CDF,
-  PaymentPlanType
+  PaymentPlanType,
+  UtilityTransaction
 } from './data/db';
 import { ContractDocument } from './components/ContractDocument';
 import { KnoxSimulator } from './components/KnoxSimulator';
+import { TransactionsTab } from './components/TransactionsTab';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import * as XLSX from 'xlsx';
 import { supabase } from './lib/supabase';
 import { supabaseDB, mapAgent } from './lib/supabaseDB';
 import { LoginPage } from './components/LoginPage';
 
 export default function App() {
   // Navigation State
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'contracts' | 'new_contract' | 'new_payment' | 'knox' | 'agents' | 'settings' | 'profile' | 'knox_stock'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'contracts' | 'new_contract' | 'new_payment' | 'knox' | 'agents' | 'settings' | 'profile' | 'knox_stock' | 'transactions'>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Session and Auth State
   const [session, setSession] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<Agent | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
+
+  // Inactivity Session Timeout (30 minutes)
+  const [showInactivityWarning, setShowInactivityWarning] = useState(false);
 
   // Data State
   const [clients, setClients] = useState<Client[]>([]);
@@ -73,6 +91,7 @@ export default function App() {
   const [delays, setDelays] = useState<DelayRecord[]>([]);
   const [smartphones, setSmartphones] = useState<Smartphone[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [transactions, setTransactions] = useState<UtilityTransaction[]>([]);
   const [activeAgentId, setActiveAgentId] = useState<string>('admin');
 
   // Interactive UI State
@@ -85,12 +104,39 @@ export default function App() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // Profile / Subordinate agent Creation form state
-  const [newUserRole, setNewUserRole] = useState<'admin' | 'agent'>('agent');
+  const [newUserRole, setNewUserRole] = useState<'admin' | 'agent' | 'operator'>('agent');
+  const [newUserCity, setNewUserCity] = useState('Bukavu');
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPhone, setNewUserPhone] = useState('');
   const [newUserCode, setNewUserCode] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
+
+  // User Management State in Settings
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'admin' | 'agent' | 'operator'>('all');
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [createPasswordOption, setCreatePasswordOption] = useState<'invite' | 'manual'>('invite');
+  const [createdUserDirectLink, setCreatedUserDirectLink] = useState<{ email: string; name: string; link: string; tempPass?: string } | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [editAgentName, setEditAgentName] = useState('');
+  const [editAgentPhone, setEditAgentPhone] = useState('');
+  const [editAgentCity, setEditAgentCity] = useState('');
+  const [editAgentRole, setEditAgentRole] = useState<'admin' | 'agent' | 'operator'>('agent');
+
+  const [resetPasswordAgent, setResetPasswordAgent] = useState<Agent | null>(null);
+  const [manualPasswordInput, setManualPasswordInput] = useState('');
+  const [deleteAgentConfirm, setDeleteAgentConfirm] = useState<Agent | null>(null);
+  const [isProcessingUserAction, setIsProcessingUserAction] = useState(false);
+
+  // Self-profile editing state (current logged-in user)
+  const [selfEditMode, setSelfEditMode] = useState(false);
+  const [selfEditName, setSelfEditName] = useState('');
+  const [selfEditPhone, setSelfEditPhone] = useState('');
+  const [selfEditCity, setSelfEditCity] = useState('');
+  const [isSavingSelfProfile, setIsSavingSelfProfile] = useState(false);
 
   // New Contract Form State
   const [formStep, setFormStep] = useState(1);
@@ -103,7 +149,7 @@ export default function App() {
     addressNum: '',
     addressAvenue: '',
     neighborhood: '',
-    cityCommune: 'Goma',
+    cityCommune: 'Bukavu',
     identityDocType: "Carte d'électeur" as Client['identityDocType'],
     identityDocNum: '',
     identityCardPhoto: '',
@@ -155,6 +201,50 @@ export default function App() {
     };
   }, []);
 
+  // Inactivity Session Timeout (30 minutes)
+  useEffect(() => {
+    if (!session) return;
+
+    const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+    const WARNING_BEFORE_MS = 2 * 60 * 1000; // Warning 2 min before expiration
+
+    let timeoutId: any;
+    let warningId: any;
+
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      clearTimeout(warningId);
+      setShowInactivityWarning(false);
+
+      warningId = setTimeout(() => {
+        setShowInactivityWarning(true);
+      }, INACTIVITY_TIMEOUT_MS - WARNING_BEFORE_MS);
+
+      timeoutId = setTimeout(async () => {
+        setShowInactivityWarning(false);
+        try {
+          await supabase.auth.signOut();
+        } catch (e) {
+          console.error("Signout error:", e);
+        }
+        setSession(null);
+        setCurrentUser(null);
+        showToast("Votre session a expiré après 30 minutes d'inactivité pour des raisons de sécurité.", "error");
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach(evt => window.addEventListener(evt, resetTimer, { passive: true }));
+
+    resetTimer();
+
+    return () => {
+      clearTimeout(timeoutId);
+      clearTimeout(warningId);
+      activityEvents.forEach(evt => window.removeEventListener(evt, resetTimer));
+    };
+  }, [session]);
+
   const fetchCurrentUser = async (userId: string) => {
     try {
       const { data, error } = await supabase.from('agents').select('*').eq('id', userId).single();
@@ -171,10 +261,11 @@ export default function App() {
             email: user.email || '',
             phone: meta.phone || '',
             code: meta.code || 'N/A',
-            role: (meta.role as 'admin' | 'agent') || 'agent',
+            role: (meta.role as 'admin' | 'agent' | 'operator') || 'agent',
+            city: meta.city || 'Bukavu',
           };
           setCurrentUser(fallbackAgent);
-          if (fallbackAgent.role === 'admin') {
+          if (fallbackAgent.role === 'admin' || fallbackAgent.role === 'operator') {
             setActiveAgentId('admin');
           } else {
             setActiveAgentId(fallbackAgent.id);
@@ -187,8 +278,8 @@ export default function App() {
       const mapped = mapAgent(data);
       setCurrentUser(mapped);
 
-      // Default views
-      if (mapped.role === 'admin') {
+      // Default views: Admin and Operator see all records
+      if (mapped.role === 'admin' || mapped.role === 'operator') {
         setActiveAgentId('admin');
       } else {
         setActiveAgentId(mapped.id);
@@ -222,13 +313,14 @@ export default function App() {
 
   const refreshData = async () => {
     try {
-      const [a, s, c, co, p, d] = await Promise.all([
+      const [a, s, c, co, p, d, tx] = await Promise.all([
         supabaseDB.getAgents(),
         supabaseDB.getSmartphones(),
         supabaseDB.getClients(),
         supabaseDB.getContracts(),
         supabaseDB.getPayments(),
-        supabaseDB.getDelayRecords()
+        supabaseDB.getDelayRecords(),
+        supabaseDB.getTransactions().catch(() => [] as UtilityTransaction[])
       ]);
       setAgents(a);
       setSmartphones(s);
@@ -236,8 +328,72 @@ export default function App() {
       setContracts(co);
       setPayments(p);
       setDelays(d);
+      setTransactions(tx || []);
     } catch (err) {
       console.error('Error refreshing data from Supabase:', err);
+    }
+  };
+
+  const handleAddTransaction = async (txData: Omit<UtilityTransaction, 'id' | 'createdAt'>) => {
+    await supabaseDB.addTransaction(txData);
+    await refreshData();
+  };
+
+  // Export Contracts to Excel (.xlsx)
+  const handleExportContractsExcel = () => {
+    if (contracts.length === 0) {
+      showToast("Aucun contrat à exporter.", "error");
+      return;
+    }
+
+    try {
+      const dataToExport = filteredContracts.map((c, idx) => {
+        const client = clients.find(cl => cl.id === c.clientId);
+        const phone = smartphones.find(sp => sp.id === c.smartphoneId);
+        const agent = agents.find(a => a.id === c.agentId);
+
+        const contractPayments = payments.filter(p => p.contractNumber === c.contractNumber && p.status === 'Terminé');
+        const totalPaid = contractPayments.reduce((acc, curr) => acc + curr.amountUsd, 0);
+        const totalCost = c.initialDepositUsd + (c.installmentAmountUsd * c.totalInstallments);
+        const remaining = Math.max(0, totalCost - totalPaid);
+
+        return {
+          "N°": idx + 1,
+          "N° Contrat": c.contractNumber,
+          "Date Souscription": c.subscriptionDate,
+          "Nom Client": client ? `${client.lastName} ${client.middleName || ''} ${client.firstName}`.trim() : 'N/A',
+          "Téléphone WhatsApp": client?.phoneWhatsApp || 'N/A',
+          "Téléphone Urgence": client?.phoneUrgency || 'N/A',
+          "Type Pièce": client?.identityDocType || 'N/A',
+          "N° Pièce": client?.identityDocNum || 'N/A',
+          "Adresse Client": client ? `${client.addressNum} Av. ${client.addressAvenue}, Q. ${client.neighborhood}, ${client.cityCommune}` : 'N/A',
+          "Smartphone": phone ? `${phone.brand} ${phone.model}` : 'N/A',
+          "IMEI": phone?.imei || 'N/A',
+          "Valeur Téléphone ($)": phone?.valueUsd || 0,
+          "Plan": c.planType === 'hebdo' ? 'Hebdomadaire (8x)' : 'Mensuel (2x)',
+          "Acompte Initial ($)": c.initialDepositUsd,
+          "Montant Échéance ($)": c.installmentAmountUsd,
+          "Nb Échéances": c.totalInstallments,
+          "Jour de Paiement": c.paymentDay,
+          "Total Payé ($)": totalPaid,
+          "Reste à Payer ($)": remaining,
+          "Statut Contrat": c.status === 'termine' ? 'Acquitté' : c.status === 'bloque' ? 'Bloqué Knox' : c.status === 'en_retard' ? 'En retard' : 'En cours',
+          "Agent Responsable": agent?.name || 'N/A',
+          "Code Agent": agent?.code || 'N/A',
+          "Ville Agent": agent?.city || 'Bukavu',
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Contrats Ali Mobile');
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(workbook, `AliMobile_Contrats_${dateStr}.xlsx`);
+      showToast("Fichier Excel des contrats exporté avec succès !");
+    } catch (err: any) {
+      console.error('Export error:', err);
+      showToast("Erreur lors de l'exportation des contrats", "error");
     }
   };
 
@@ -259,45 +415,208 @@ export default function App() {
     showToast("La réinitialisation globale de la base de données est désactivée en production.", "error");
   };
 
-  // Auto-generate code for new subordinate/agent
+  // Auto-generate code for new subordinate/agent/operator
   useEffect(() => {
     const nextNum = agents.length + 1;
     if (newUserRole === 'admin') {
       setNewUserCode(`AD-243-0${nextNum}`);
+    } else if (newUserRole === 'operator') {
+      setNewUserCode(`OP-243-0${nextNum}`);
     } else {
       setNewUserCode(`AG-243-0${nextNum}`);
     }
   }, [newUserRole, agents]);
 
-  // Handle creation of agent/sub-admin
+  // Handle creation of agent/operator/sub-admin
   const handleCreateSubordinate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserName || !newUserEmail || !newUserPhone || !newUserCode || !newUserPassword) {
-      showToast("Veuillez remplir tous les champs.", "error");
+    if (!newUserName || !newUserEmail || !newUserPhone || !newUserCode || !newUserCity) {
+      showToast("Veuillez remplir tous les champs obligatoires.", "error");
+      return;
+    }
+
+    if (createPasswordOption === 'manual' && (!newUserPassword || newUserPassword.length < 6)) {
+      showToast("Le mot de passe doit comporter au moins 6 caractères.", "error");
       return;
     }
 
     try {
-      showToast("Création du compte agent en cours...");
+      setIsProcessingUserAction(true);
+      showToast("Création du compte en cours...");
+      const pass = createPasswordOption === 'manual' ? newUserPassword : undefined;
       await supabaseDB.createAgent({
         name: newUserName,
         email: newUserEmail,
         phone: newUserPhone,
         code: newUserCode,
-        role: 'agent',
-      }, newUserPassword);
+        role: newUserRole,
+        city: newUserCity,
+      }, pass);
 
-      showToast(`${newUserRole === 'admin' ? 'Administrateur Adjoint' : 'Agent de Vente'} créé avec succès !`);
+      // If invite option, send reset email so user defines password
+      if (createPasswordOption === 'invite') {
+        try {
+          await supabaseDB.sendPasswordResetEmail(newUserEmail);
+          showToast(`Email d'invitation avec réinitialisation envoyé à ${newUserEmail}`);
+        } catch (emailErr) {
+          console.warn("Could not send invite email directly:", emailErr);
+        }
+      }
+
+      const roleLabel = newUserRole === 'admin' ? 'Administrateur Adjoint' : newUserRole === 'operator' ? 'Opérateur Utilités' : 'Agent de Vente';
+      showToast(`${roleLabel} créé avec succès !`);
+
+      const directLink = `${window.location.origin}/#type=recovery&email=${encodeURIComponent(newUserEmail)}`;
+      setCreatedUserDirectLink({
+        email: newUserEmail,
+        name: newUserName,
+        link: directLink,
+        tempPass: createPasswordOption === 'manual' ? newUserPassword : undefined
+      });
 
       // Reset form fields
       setNewUserName('');
       setNewUserEmail('');
       setNewUserPhone('');
       setNewUserPassword('');
-      refreshData();
+      setNewUserCity('Bukavu');
+      setShowCreateUserModal(false);
+      await refreshData();
     } catch (err: any) {
       console.error(err);
-      showToast(err.message || "Erreur lors de la création de l'agent", "error");
+      showToast(err.message || "Erreur lors de la création du compte", "error");
+    } finally {
+      setIsProcessingUserAction(false);
+    }
+  };
+
+  // Update an agent's role
+  const handleUpdateAgentRole = async (agent: Agent, newRole: 'admin' | 'agent' | 'operator') => {
+    if (agent.id === currentUser?.id && newRole !== 'admin') {
+      showToast("Vous ne pouvez pas révoquer vos propres droits administrateur.", "error");
+      return;
+    }
+    try {
+      setIsProcessingUserAction(true);
+      await supabaseDB.updateAgent(agent.id, { role: newRole });
+      const roleLabel = newRole === 'admin' ? 'Administrateur' : newRole === 'operator' ? 'Opérateur Utilités' : 'Agent de Vente';
+      showToast(`Rôle de ${agent.name} mis à jour : ${roleLabel}`);
+      await refreshData();
+    } catch (err: any) {
+      showToast(err.message || "Erreur lors de la mise à jour du rôle", "error");
+    } finally {
+      setIsProcessingUserAction(false);
+    }
+  };
+
+  // Trigger password reset email for an employee
+  const handleSendResetPasswordEmail = async (agent: Agent) => {
+    try {
+      setIsProcessingUserAction(true);
+      await supabaseDB.sendPasswordResetEmail(agent.email);
+      showToast(`Email de réinitialisation envoyé à ${agent.email}`);
+    } catch (err: any) {
+      showToast(err.message || "Erreur lors de l'envoi de l'email de réinitialisation", "error");
+    } finally {
+      setIsProcessingUserAction(false);
+    }
+  };
+
+  // Directly set agent password
+  const handleDirectSetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPasswordAgent || !manualPasswordInput || manualPasswordInput.length < 6) {
+      showToast("Le mot de passe doit contenir au moins 6 caractères.", "error");
+      return;
+    }
+    try {
+      setIsProcessingUserAction(true);
+      await supabaseDB.setAgentPassword(resetPasswordAgent.id, manualPasswordInput);
+      showToast(`Mot de passe mis à jour avec succès pour ${resetPasswordAgent.name}`);
+      setResetPasswordAgent(null);
+      setManualPasswordInput('');
+    } catch (err: any) {
+      showToast(err.message || "Erreur lors de la mise à jour du mot de passe", "error");
+    } finally {
+      setIsProcessingUserAction(false);
+    }
+  };
+
+  // Delete agent
+  const handleDeleteAgent = async () => {
+    if (!deleteAgentConfirm) return;
+    if (deleteAgentConfirm.id === currentUser?.id) {
+      showToast("Vous ne pouvez pas supprimer votre propre compte.", "error");
+      return;
+    }
+    const hasActiveContracts = contracts.some(c => c.agentId === deleteAgentConfirm.id && c.status !== 'termine');
+    if (hasActiveContracts) {
+      showToast(`Impossible de supprimer ${deleteAgentConfirm.name} : cet agent gère des contrats actifs en cours.`, "error");
+      return;
+    }
+    try {
+      setIsProcessingUserAction(true);
+      await supabaseDB.deleteAgent(deleteAgentConfirm.id);
+      showToast(`Utilisateur ${deleteAgentConfirm.name} supprimé avec succès.`);
+      setDeleteAgentConfirm(null);
+      await refreshData();
+    } catch (err: any) {
+      showToast(err.message || "Erreur lors de la suppression de l'utilisateur", "error");
+    } finally {
+      setIsProcessingUserAction(false);
+    }
+  };
+
+  // Open Edit Agent modal
+  const handleOpenEditAgent = (agent: Agent) => {
+    setEditingAgent(agent);
+    setEditAgentName(agent.name);
+    setEditAgentPhone(agent.phone);
+    setEditAgentCity(agent.city || 'Bukavu');
+    setEditAgentRole(agent.role || 'agent');
+  };
+
+  // Save Edit Agent
+  const handleSaveEditAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAgent) return;
+    try {
+      setIsProcessingUserAction(true);
+      await supabaseDB.updateAgent(editingAgent.id, {
+        name: editAgentName,
+        phone: editAgentPhone,
+        city: editAgentCity,
+        role: editAgentRole
+      });
+      showToast(`Informations de ${editAgentName} enregistrées.`);
+      setEditingAgent(null);
+      await refreshData();
+    } catch (err: any) {
+      showToast(err.message || "Erreur lors de la mise à jour", "error");
+    } finally {
+      setIsProcessingUserAction(false);
+    }
+  };
+
+  // Save self-profile (current logged-in user edits own info)
+  const handleSaveSelfProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    try {
+      setIsSavingSelfProfile(true);
+      await supabaseDB.updateAgent(currentUser.id, {
+        name: selfEditName.trim(),
+        phone: selfEditPhone.trim(),
+        city: selfEditCity,
+      });
+      showToast('Profil mis à jour avec succès.');
+      setSelfEditMode(false);
+      if (session?.user?.id) await fetchCurrentUser(session.user.id);
+      await refreshData();
+    } catch (err: any) {
+      showToast(err.message || 'Erreur lors de la mise à jour du profil', 'error');
+    } finally {
+      setIsSavingSelfProfile(false);
     }
   };
 
@@ -582,7 +901,7 @@ export default function App() {
         addressNum: '',
         addressAvenue: '',
         neighborhood: '',
-        cityCommune: 'Goma',
+        cityCommune: 'Bukavu',
         identityDocType: "Carte d'électeur",
         identityDocNum: '',
         identityCardPhoto: '',
@@ -644,10 +963,12 @@ export default function App() {
     }
   };
 
-  // Filter lists based on role (Agent sees only his clients/contracts/payments, Admin sees all)
+  // Filter lists based on role (Admin and Operator see all records, Agent sees only his own)
+  const canViewAll = activeAgentId === 'admin' || currentUser?.role === 'admin' || currentUser?.role === 'operator';
+
   const filteredClients = clients.filter(c => {
     const matchesSearch = `${c.lastName} ${c.firstName} ${c.phoneWhatsApp}`.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesAgent = activeAgentId === 'admin' ? true : c.agentId === activeAgentId;
+    const matchesAgent = canViewAll ? true : c.agentId === activeAgentId;
     return matchesSearch && matchesAgent;
   });
 
@@ -655,7 +976,7 @@ export default function App() {
     const client = clients.find(cl => cl.id === c.clientId);
     const clientName = client ? `${client.lastName} ${client.firstName}` : '';
     const matchesSearch = `${c.contractNumber} ${clientName}`.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesAgent = activeAgentId === 'admin' ? true : c.agentId === activeAgentId;
+    const matchesAgent = canViewAll ? true : c.agentId === activeAgentId;
     return matchesSearch && matchesAgent;
   });
 
@@ -663,7 +984,7 @@ export default function App() {
     const client = clients.find(cl => cl.id === p.clientId);
     const clientName = client ? `${client.lastName} ${client.firstName}` : '';
     const matchesSearch = `${p.contractNumber} ${p.transactionRef} ${clientName}`.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesAgent = activeAgentId === 'admin' ? true : p.agentId === activeAgentId;
+    const matchesAgent = canViewAll ? true : p.agentId === activeAgentId;
     return matchesSearch && matchesAgent;
   });
 
@@ -672,14 +993,14 @@ export default function App() {
     const clientName = client ? `${client.lastName} ${client.firstName}` : '';
     const matchesSearch = `${d.contractNumber} ${clientName}`.toLowerCase().includes(searchTerm.toLowerCase());
     const contract = contracts.find(co => co.contractNumber === d.contractNumber);
-    const matchesAgent = activeAgentId === 'admin' ? true : (contract?.agentId === activeAgentId);
+    const matchesAgent = canViewAll ? true : (contract?.agentId === activeAgentId);
     return matchesSearch && matchesAgent && d.status === 'Actif';
   });
 
   // Calculate Dashboard Metrics
-  const activeContracts = contracts.filter(c => activeAgentId === 'admin' ? true : c.agentId === activeAgentId);
+  const activeContracts = contracts.filter(c => canViewAll ? true : c.agentId === activeAgentId);
   const totalEncaisse = payments
-    .filter(p => p.status === 'Terminé' && (activeAgentId === 'admin' ? true : p.agentId === activeAgentId))
+    .filter(p => p.status === 'Terminé' && (canViewAll ? true : p.agentId === activeAgentId))
     .reduce((acc, curr) => acc + curr.amountUsd, 0);
 
   const totalClientsCount = filteredClients.length;
@@ -844,7 +1165,9 @@ export default function App() {
 
         <div className="p-6 flex items-center justify-between border-b border-slate-800/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-500 rounded-none flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-orange-500/20">A</div>
+            <div className="w-10 h-10 bg-white border border-slate-700 flex items-center justify-center p-0.5 shrink-0">
+                <img src="/logo_alimobile.jpeg" alt="Ali Mobile" className="w-full h-full object-contain" />
+              </div>
             <span className="text-white font-bold text-xl tracking-tight">Ali Mobile</span>
           </div>
           {/* Close button on mobile */}
@@ -863,12 +1186,19 @@ export default function App() {
           <ul className="space-y-2">
             {[
               { id: 'dashboard', label: 'Tableau de bord', icon: TrendingUp },
-              { id: 'contracts', label: 'Voir ses clients', icon: Users },
-              { id: 'new_contract', label: 'Créer un contrat', icon: PlusCircle },
-              { id: 'new_payment', label: 'Ajouter un paiement', icon: Coins },
+              { id: 'contracts', label: currentUser?.role === 'operator' ? 'Contrats (Lecture)' : 'Voir ses clients', icon: Users },
+              ...(currentUser?.role !== 'operator' ? [
+                { id: 'new_contract', label: 'Créer un contrat', icon: PlusCircle },
+                { id: 'new_payment', label: 'Ajouter un paiement', icon: Coins },
+              ] : []),
+              ...(currentUser?.role === 'operator' || currentUser?.role === 'admin' ? [
+                { id: 'transactions', label: 'Transactions Utilités', icon: ArrowLeftRight, badge: transactions.length > 0 ? transactions.length : undefined },
+              ] : []),
               { id: 'knox', label: 'Voir ses retards', icon: ShieldAlert, badge: filteredDelays.length > 0 ? filteredDelays.length : undefined },
-              { id: 'agents', label: 'Statistiques Agents', icon: Activity },
-              { id: 'knox_stock', label: 'Stock Samsung Knox', icon: Database },
+              ...(currentUser?.role === 'admin' ? [
+                { id: 'agents', label: 'Statistiques Agents', icon: Activity },
+                { id: 'knox_stock', label: 'Stock Samsung Knox', icon: Database },
+              ] : []),
               { id: 'settings', label: 'Paramètres', icon: Settings },
             ].map((item) => {
               const Icon = item.icon;
@@ -940,7 +1270,9 @@ export default function App() {
             onClick={() => setIsMobileSidebarOpen(true)}
             className="flex md:hidden items-center gap-3 cursor-pointer group hover:opacity-80 transition select-none"
           >
-            <div className="w-9 h-9 bg-orange-500 rounded-none flex items-center justify-center text-white font-bold text-lg shadow-md shadow-orange-500/20">A</div>
+            <div className="w-9 h-9 bg-white border border-slate-200 flex items-center justify-center p-0.5 shrink-0">
+                <img src="/logo_alimobile.jpeg" alt="Ali Mobile" className="w-full h-full object-contain" />
+              </div>
             <span className="text-slate-900 font-bold text-sm tracking-tight uppercase">Ali Mobile</span>
             <Menu className="w-5 h-5 text-slate-500 ml-1 group-hover:text-orange-500 transition" />
           </div>
@@ -983,21 +1315,49 @@ export default function App() {
             >
               <LogOut className="w-4.5 h-4.5" />
             </button>
-            <button
-              onClick={() => {
-                setActiveTab('new_contract');
-                setSelectedClientForDetails(null);
-                setSelectedContract(null);
-              }}
-              className="hidden sm:inline-block bg-orange-500 text-white px-5 py-2 rounded-none font-semibold text-xs shadow-md shadow-orange-500/20 hover:bg-orange-600 transition"
-            >
-              Créer un contrat
-            </button>
+            {currentUser?.role !== 'operator' ? (
+              <button
+                onClick={() => {
+                  setActiveTab('new_contract');
+                  setSelectedClientForDetails(null);
+                  setSelectedContract(null);
+                }}
+                className="hidden sm:inline-block bg-orange-500 text-white px-5 py-2 rounded-none font-semibold text-xs shadow-md shadow-orange-500/20 hover:bg-orange-600 transition cursor-pointer"
+              >
+                Créer un contrat
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setActiveTab('transactions');
+                  setSelectedClientForDetails(null);
+                  setSelectedContract(null);
+                }}
+                className="hidden sm:inline-block bg-orange-500 text-white px-5 py-2 rounded-none font-semibold text-xs shadow-md shadow-orange-500/20 hover:bg-orange-600 transition cursor-pointer"
+              >
+                Nouvelle Transaction
+              </button>
+            )}
           </div>
         </header>
 
         {/* Content Panel */}
         <main className="flex-grow flex flex-col overflow-y-auto bg-slate-50 p-4 md:p-8 rounded-none">
+
+          {/* Inactivity Warning Banner (2 min before 30 min expiration) */}
+          {showInactivityWarning && (
+            <div className="mb-6 bg-amber-400 border border-amber-500 text-slate-950 px-4 py-3 font-bold text-xs flex items-center justify-between shadow-lg animate-pulse">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-5 h-5 text-slate-950 shrink-0" />
+                <span>
+                  Attention : Votre session expirera dans moins de 2 minutes pour inactivité. Cliquez ou effectuez une action pour rester connecté.
+                </span>
+              </div>
+              <span className="text-[10px] uppercase font-mono px-2 py-0.5 bg-slate-950 text-amber-300 font-black">
+                Expiration 30 min
+              </span>
+            </div>
+          )}
 
           {/* Dashboard Tab */}
           {activeTab === 'dashboard' && (
@@ -1232,7 +1592,7 @@ export default function App() {
                 <div className="relative z-10 flex flex-col justify-between h-full">
                   <div>
                     <h3 className="text-2xl font-black italic uppercase leading-none tracking-tight">Promotion Spéciale Ali Mobile</h3>
-                    <p className="mt-2 text-orange-50 max-w-xl text-sm font-medium">Doublez votre volume Internet et recevez des minutes de communication gratuites pour chaque souscription de smartphone effectuée ce mois-ci. Offre réservée à nos clients à Goma.</p>
+                    <p className="mt-2 text-orange-50 max-w-xl text-sm font-medium">Doublez votre volume Internet et recevez des minutes de communication gratuites pour chaque souscription de smartphone effectuée ce mois-ci. Offre réservée à nos clients à Bukavu.</p>
                   </div>
                   <div>
                     <button
@@ -1255,7 +1615,7 @@ export default function App() {
                     <h3 className="text-sm uppercase font-bold tracking-wider text-slate-800 font-display">
                       Historique des factures et paiements récents
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">Dernières transactions par Mobile Money et espèces à Goma.</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Dernières transactions par Mobile Money et espèces à Bukavu.</p>
                   </div>
                   <div className="mt-2 sm:mt-0 flex space-x-2">
                     <input
@@ -1328,7 +1688,7 @@ export default function App() {
                   </h1>
                   <p className="text-xs text-slate-500 mt-1">Liste complète des acheteurs, smartphones, et états de paiement.</p>
                 </div>
-                <div className="mt-2 sm:mt-0 flex space-x-2">
+                <div className="mt-2 sm:mt-0 flex items-center space-x-2">
                   <div className="relative">
                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
                     <input
@@ -1339,6 +1699,16 @@ export default function App() {
                       className="bg-white text-xs pl-8 pr-3 py-2 rounded-xl border border-slate-200 text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 w-64 shadow-sm"
                     />
                   </div>
+                  {currentUser?.role !== 'operator' && (
+                    <button
+                      onClick={handleExportContractsExcel}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+                      title="Exporter les contrats en format Excel .xlsx"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Exporter .XLSX</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1410,35 +1780,43 @@ export default function App() {
                               </span>
                             </td>
                             <td className="p-3 text-right space-x-1.5 whitespace-nowrap">
-                              <button
-                                onClick={() => setViewingContractDoc(contract)}
-                                className="bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 p-2 rounded-xl transition inline-flex items-center"
-                                title="Voir le contrat imprimable"
-                              >
-                                <Printer className="w-3.5 h-3.5" />
-                              </button>
-                              {contract.status === 'bloque' && (
-                                <button
-                                  onClick={() => setKnoxSimulatingContract(contract)}
-                                  className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 p-2 rounded-xl transition inline-flex items-center"
-                                  title="Ouvrir le simulateur de blocage"
-                                >
-                                  <ShieldAlert className="w-3.5 h-3.5" />
-                                </button>
+                              {currentUser?.role === 'operator' ? (
+                                <span className="text-[10px] text-slate-400 italic font-mono px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg">
+                                  Lecture seule
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => setViewingContractDoc(contract)}
+                                    className="bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 p-2 rounded-xl transition inline-flex items-center"
+                                    title="Voir le contrat imprimable"
+                                  >
+                                    <Printer className="w-3.5 h-3.5" />
+                                  </button>
+                                  {contract.status === 'bloque' && (
+                                    <button
+                                      onClick={() => setKnoxSimulatingContract(contract)}
+                                      className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 p-2 rounded-xl transition inline-flex items-center"
+                                      title="Ouvrir le simulateur de blocage"
+                                    >
+                                      <ShieldAlert className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      setPaymentForm(prev => ({
+                                        ...prev,
+                                        contractNumber: contract.contractNumber,
+                                        amountUsd: contract.installmentAmountUsd.toString()
+                                      }));
+                                      setActiveTab('new_payment');
+                                    }}
+                                    className="bg-orange-500 text-white hover:bg-orange-600 py-2 px-3 rounded-xl text-xs font-bold transition shadow-sm shadow-orange-500/20"
+                                  >
+                                    Payer
+                                  </button>
+                                </>
                               )}
-                              <button
-                                onClick={() => {
-                                  setPaymentForm(prev => ({
-                                    ...prev,
-                                    contractNumber: contract.contractNumber,
-                                    amountUsd: contract.installmentAmountUsd.toString()
-                                  }));
-                                  setActiveTab('new_payment');
-                                }}
-                                className="bg-orange-500 text-white hover:bg-orange-600 py-2 px-3 rounded-xl text-xs font-bold transition shadow-sm shadow-orange-500/20"
-                              >
-                                Payer
-                              </button>
                             </td>
                           </tr>
                         );
@@ -1542,7 +1920,7 @@ export default function App() {
                     </div>
 
                     <div className="bg-slate-50 p-5 rounded-2xl border border-slate-150 space-y-3">
-                      <span className="text-xs font-bold text-slate-700 uppercase tracking-widest block">Adresse physique à Goma</span>
+                      <span className="text-xs font-bold text-slate-700 uppercase tracking-widest block">Adresse physique à Bukavu</span>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div>
                           <label className="text-[9px] uppercase font-bold text-slate-400 block mb-1">N°</label>
@@ -1583,7 +1961,7 @@ export default function App() {
                         <input
                           type="text"
                           required
-                          placeholder="Goma, Bukavu, etc."
+                          placeholder="Bukavu, Bukavu, etc."
                           value={clientForm.cityCommune}
                           onChange={(e) => setClientForm(prev => ({ ...prev, cityCommune: e.target.value }))}
                           className="w-full bg-white border border-slate-200 rounded-lg text-sm p-2 focus:outline-none focus:border-orange-500 transition"
@@ -2446,43 +2824,247 @@ export default function App() {
 
           {/* Settings / Configuration Tab */}
           {activeTab === 'settings' && (
-            <div className="no-print space-y-6 max-w-2xl mx-auto w-full">
-              <div className="border-b border-slate-200 pb-4">
-                <h1 className="text-2xl font-black text-slate-900 tracking-tight font-display uppercase italic">
-                  Paramètres de l'Application
-                </h1>
-                <p className="text-xs text-slate-500 mt-1">Gérer les données de base, l'intégration des terminaux et la réinitialisation.</p>
+            <div className="no-print space-y-6 max-w-6xl mx-auto w-full animate-fadeIn pb-12">
+              <div className="border-b border-slate-200 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-black text-slate-900 tracking-tight font-display uppercase italic flex items-center">
+                    <Settings className="w-6 h-6 mr-2 text-orange-500" />
+                    <span>Paramètres & Administration</span>
+                  </h1>
+                  <p className="text-xs text-slate-500 mt-1 font-mono">
+                    Gestion des utilisateurs, attribution des rôles, sécurité des accès et diagnostic système.
+                  </p>
+                </div>
+
+                {currentUser?.role === 'admin' && (
+                  <button
+                    onClick={() => setShowCreateUserModal(true)}
+                    className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 px-4 rounded-none text-xs uppercase tracking-wider transition flex items-center space-x-2 cursor-pointer shadow-none shrink-0 self-start md:self-auto"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>+ Nouvel Utilisateur</span>
+                  </button>
+                )}
               </div>
 
-              <div className="bg-white border border-slate-100 shadow-sm rounded-3xl p-6 md:p-8 space-y-6">
+              {/* SECTION 1: User Management (Admin Only) */}
+              {currentUser?.role === 'admin' ? (
+                <div className="bg-white border border-slate-200 shadow-sm rounded-none overflow-hidden">
+                  <div className="p-4 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50/50">
+                    <div>
+                      <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider font-display flex items-center">
+                        <Users className="w-4 h-4 mr-2 text-orange-500" />
+                        <span>Gestion des Comptes Utilisateurs & Rôles</span>
+                      </h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5 font-mono">
+                        Attribuez des rôles (Admin, Opérateur, Agent), réinitialisez les mots de passe et gérez les accès.
+                      </p>
+                    </div>
 
+                    {/* Filter and Search */}
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          value={userSearchTerm}
+                          onChange={(e) => setUserSearchTerm(e.target.value)}
+                          placeholder="Rechercher nom, email, code, ville..."
+                          className="pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-none focus:outline-none focus:border-orange-500 w-full sm:w-56 font-medium text-slate-800 placeholder:text-slate-400"
+                        />
+                      </div>
+                      <select
+                        value={userRoleFilter}
+                        onChange={(e) => setUserRoleFilter(e.target.value as any)}
+                        className="text-xs bg-white border border-slate-200 rounded-none px-3 py-1.5 focus:outline-none focus:border-orange-500 font-bold text-slate-700 cursor-pointer"
+                      >
+                        <option value="all">Tous les rôles ({agents.length})</option>
+                        <option value="admin">Administrateurs ({agents.filter(a => a.role === 'admin').length})</option>
+                        <option value="operator">Opérateurs Utilités ({agents.filter(a => a.role === 'operator').length})</option>
+                        <option value="agent">Agents de Vente ({agents.filter(a => a.role === 'agent' || !a.role).length})</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Users Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-600 border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-[10px] font-bold font-display bg-slate-50/70">
+                          <th className="py-3 px-4">Utilisateur / Identifiant</th>
+                          <th className="py-3 px-4">Contact</th>
+                          <th className="py-3 px-4">Ville</th>
+                          <th className="py-3 px-4">Rôle Attribué</th>
+                          <th className="py-3 px-4 text-center">Sécurité Mot de Passe</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {agents
+                          .filter(a => {
+                            const term = userSearchTerm.toLowerCase();
+                            const matchesSearch =
+                              a.name.toLowerCase().includes(term) ||
+                              a.email.toLowerCase().includes(term) ||
+                              a.code.toLowerCase().includes(term) ||
+                              (a.city && a.city.toLowerCase().includes(term));
+                            const role = a.role || 'agent';
+                            const matchesRole = userRoleFilter === 'all' || role === userRoleFilter;
+                            return matchesSearch && matchesRole;
+                          })
+                          .map((agent) => {
+                            const isCurrentUser = agent.id === currentUser?.id;
+                            const role = agent.role || 'agent';
+                            const roleBadgeColor =
+                              role === 'admin'
+                                ? 'bg-orange-50 text-orange-700 border-orange-200'
+                                : role === 'operator'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+
+                            return (
+                              <tr key={agent.id} className="hover:bg-slate-50/80 transition">
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center space-x-3">
+                                    <div className={`w-8 h-8 rounded-none flex items-center justify-center font-bold text-xs uppercase text-white shadow-none ${
+                                      role === 'admin' ? 'bg-gradient-to-tr from-orange-600 to-amber-500' :
+                                      role === 'operator' ? 'bg-gradient-to-tr from-blue-600 to-indigo-500' :
+                                      'bg-gradient-to-tr from-emerald-600 to-teal-500'
+                                    }`}>
+                                      {agent.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                    </div>
+                                    <div>
+                                      <div className="flex items-center space-x-1.5">
+                                        <span className="font-bold text-slate-900">{agent.name}</span>
+                                        {isCurrentUser && (
+                                          <span className="bg-slate-900 text-white font-mono text-[9px] font-bold px-1.5 py-0.5 rounded-none">
+                                            Vous
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="font-mono text-[10px] text-slate-500 font-semibold bg-slate-100 px-1.5 py-0.5 rounded-none border border-slate-200 inline-block mt-0.5">
+                                        {agent.code}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                <td className="py-3 px-4">
+                                  <div className="space-y-0.5 font-mono">
+                                    <span className="text-slate-800 font-medium block text-xs">{agent.email}</span>
+                                    <span className="text-[11px] text-slate-400 block">{agent.phone}</span>
+                                  </div>
+                                </td>
+
+                                <td className="py-3 px-4">
+                                  <span className="inline-flex items-center text-slate-700 font-semibold bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-none text-xs">
+                                    <MapPin className="w-3 h-3 mr-1 text-orange-500" />
+                                    <span>{agent.city || 'Goma'}</span>
+                                  </span>
+                                </td>
+
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center space-x-2">
+                                    <select
+                                      value={role}
+                                      disabled={isCurrentUser || isProcessingUserAction}
+                                      onChange={(e) => handleUpdateAgentRole(agent, e.target.value as any)}
+                                      className={`text-xs font-bold px-2.5 py-1 rounded-none border transition cursor-pointer ${roleBadgeColor} ${
+                                        isCurrentUser ? 'opacity-80 cursor-not-allowed' : 'hover:border-slate-400 focus:outline-none focus:ring-1 focus:ring-orange-500'
+                                      }`}
+                                      title={isCurrentUser ? "Vous ne pouvez pas modifier votre propre rôle" : "Changer le rôle"}
+                                    >
+                                      <option value="agent">Agent de Vente</option>
+                                      <option value="operator">Opérateur Utilités</option>
+                                      <option value="admin">Administrateur</option>
+                                    </select>
+                                  </div>
+                                </td>
+
+                                <td className="py-3 px-4 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => setResetPasswordAgent(agent)}
+                                    className="inline-flex items-center space-x-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-1.5 rounded-none text-[11px] font-bold uppercase tracking-wider transition cursor-pointer"
+                                    title="Réinitialiser ou envoyer le lien de mot de passe"
+                                  >
+                                    <Key className="w-3.5 h-3.5 text-slate-500" />
+                                    <span>Gérer le mot de passe</span>
+                                  </button>
+                                </td>
+
+                                <td className="py-3 px-4 text-right">
+                                  <div className="flex items-center justify-end space-x-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditAgent(agent)}
+                                      className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-none transition cursor-pointer border border-transparent hover:border-slate-200"
+                                      title="Modifier les coordonnées"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      disabled={isCurrentUser || isProcessingUserAction}
+                                      onClick={() => setDeleteAgentConfirm(agent)}
+                                      className={`p-1.5 rounded-none transition border border-transparent ${
+                                        isCurrentUser
+                                          ? 'text-slate-200 cursor-not-allowed'
+                                          : 'text-red-500 hover:text-red-700 hover:bg-red-50 hover:border-red-100 cursor-pointer'
+                                      }`}
+                                      title={isCurrentUser ? "Impossible de supprimer votre propre compte" : "Supprimer l'utilisateur"}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-50 border border-slate-200 rounded-none p-6 text-center text-slate-500 space-y-2 text-xs">
+                  <ShieldAlert className="w-8 h-8 text-slate-300 mx-auto" />
+                  <p className="font-bold text-slate-700 uppercase tracking-wider">Privilèges restreints</p>
+                  <p className="max-w-md mx-auto">
+                    La gestion des utilisateurs, l'attribution des rôles et la réinitialisation des mots de passe sont réservées aux administrateurs.
+                  </p>
+                </div>
+              )}
+
+              {/* SECTION 2: Knox integration diagnostics & DB reset */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Knox integration diagnostics */}
-                <div className="space-y-3">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-display flex items-center">
+                <div className="bg-white border border-slate-200 shadow-sm rounded-none p-5 space-y-4">
+                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider font-display flex items-center">
                     <Database className="w-4 h-4 mr-2 text-orange-500" />
                     <span>État de l'intégration Samsung Knox API</span>
                   </h4>
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-150 text-xs space-y-3">
+                  <div className="bg-slate-50 p-4 rounded-none border border-slate-200 text-xs space-y-3 font-mono">
                     <div className="flex justify-between items-center">
                       <span className="text-slate-500 font-medium">Statut du serveur de licence :</span>
-                      <span className="text-emerald-600 font-bold flex items-center space-x-1.5 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                      <span className="text-emerald-700 font-bold flex items-center space-x-1.5 bg-emerald-50 px-2 py-0.5 rounded-none border border-emerald-200 text-[10px]">
+                        <span className="w-2 h-2 rounded-none bg-emerald-500 inline-block animate-pulse"></span>
                         <span>OPÉRATIONNEL (CLOUD)</span>
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-slate-500 font-medium">Version du SDK Ali Knox Controller :</span>
-                      <span className="font-mono text-slate-700 font-bold">v4.18.26-GOMA</span>
+                      <span className="font-mono text-slate-800 font-bold">v4.18.26-GOMA</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-slate-500 font-medium">Rapprochement Mobile Money :</span>
-                      <span className="text-orange-600 font-semibold font-mono">M-Pesa, Airtel Money, Orange Money (LIVE)</span>
+                      <span className="text-orange-600 font-semibold font-mono text-[11px]">M-Pesa, Airtel Money, Orange Money (LIVE)</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Database Reset Action */}
-                <div className="border-t border-slate-100 pt-6 space-y-3">
+                <div className="bg-white border border-slate-200 shadow-sm rounded-none p-5 space-y-4">
                   <h4 className="text-xs font-bold text-red-600 uppercase tracking-wider font-display">
                     Zone de Danger
                   </h4>
@@ -2493,13 +3075,13 @@ export default function App() {
                   {!showResetConfirm ? (
                     <button
                       onClick={() => setShowResetConfirm(true)}
-                      className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-150 py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center space-x-2 cursor-pointer"
+                      className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 py-2.5 px-4 rounded-none text-xs font-bold uppercase tracking-wider transition flex items-center space-x-2 cursor-pointer shadow-none"
                     >
                       <RefreshCw className="w-4 h-4" />
                       <span>Réinitialiser la Base de Données</span>
                     </button>
                   ) : (
-                    <div className="bg-red-50 border border-red-200 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
+                    <div className="bg-red-50 border border-red-200 p-4 rounded-none flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
                       <div>
                         <p className="text-xs font-bold text-red-800">Êtes-vous sûr à 100% ?</p>
                         <p className="text-[11px] text-red-600">Cette action restaurera les données d'exemple d'origine d'Ali Mobile.</p>
@@ -2511,14 +3093,14 @@ export default function App() {
                             handleResetDB();
                             setShowResetConfirm(false);
                           }}
-                          className="bg-red-600 hover:bg-red-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
+                          className="bg-red-600 hover:bg-red-700 text-white px-3.5 py-1.5 rounded-none text-xs font-bold uppercase tracking-wider transition cursor-pointer"
                         >
                           Oui, réinitialiser
                         </button>
                         <button
                           type="button"
                           onClick={() => setShowResetConfirm(false)}
-                          className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
+                          className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3.5 py-1.5 rounded-none text-xs font-bold uppercase tracking-wider transition cursor-pointer"
                         >
                           Annuler
                         </button>
@@ -2544,48 +3126,131 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                 {/* Profile Card Left */}
-                <div className="bg-white border border-slate-100 shadow-sm rounded-3xl p-6 space-y-6 flex flex-col items-center text-center">
-                  {/* Profile avatar: initials from currentUser if admin, else from the selected agent */}
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-orange-500 to-amber-400 text-white flex items-center justify-center font-bold text-3xl uppercase shadow-lg shadow-orange-500/10">
+                <div className="bg-white border border-slate-200 shadow-sm rounded-none p-6 space-y-5 flex flex-col items-center text-center">
+                  {/* Avatar initials */}
+                  <div className="w-20 h-20 rounded-none bg-gradient-to-tr from-orange-500 to-amber-400 text-white flex items-center justify-center font-bold text-2xl uppercase shadow-md">
                     {activeAgentId === 'admin'
                       ? (currentUser?.name?.split(' ').map(n => n[0]).join('') || 'AD')
                       : agents.find(a => a.id === activeAgentId)?.name?.split(' ').map(n => n[0]).join('') || 'AG'}
                   </div>
 
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900 tracking-tight">
-                      {activeAgentId === 'admin' ? (currentUser?.name || 'Administrateur') : agents.find(a => a.id === activeAgentId)?.name}
-                    </h3>
-                    <span className="inline-block mt-1 px-3 py-1 bg-orange-50 border border-orange-100 text-orange-600 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                      {activeAgentId === 'admin' ? 'Administrateur Principal' : 'Agent de Vente Agréé'}
-                    </span>
-                  </div>
+                  {!selfEditMode ? (
+                    <>
+                      <div>
+                        <h3 className="text-base font-black text-slate-900 tracking-tight uppercase">
+                          {activeAgentId === 'admin' ? (currentUser?.name || 'Administrateur') : agents.find(a => a.id === activeAgentId)?.name}
+                        </h3>
+                        <span className="inline-block mt-1 px-3 py-1 bg-orange-50 border border-orange-200 text-orange-600 rounded-none text-[10px] font-bold uppercase tracking-wider">
+                          {activeAgentId === 'admin' ? 'Administrateur' : (agents.find(a => a.id === activeAgentId)?.role === 'operator' ? 'Opérateur' : 'Agent de Vente')}
+                        </span>
+                      </div>
 
-                  <div className="w-full border-t border-slate-100 pt-4 space-y-2 text-xs text-left">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-medium">Adresse Email :</span>
-                      <span className="text-slate-800 font-bold font-mono">
-                        {activeAgentId === 'admin' ? (currentUser?.email || '—') : agents.find(a => a.id === activeAgentId)?.email}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-medium">Téléphone :</span>
-                      <span className="text-slate-800 font-bold font-mono">
-                        {activeAgentId === 'admin' ? (currentUser?.phone || '—') : agents.find(a => a.id === activeAgentId)?.phone}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-medium">Code Identifiant :</span>
-                      <span className="text-slate-800 font-bold font-mono">
-                        {activeAgentId === 'admin' ? (currentUser?.code || '—') : agents.find(a => a.id === activeAgentId)?.code}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400 font-medium">Ville d'affectation :</span>
-                      <span className="text-slate-800 font-bold">Goma, RDC</span>
-                    </div>
-                  </div>
+                      <div className="w-full border-t border-slate-100 pt-4 space-y-2.5 text-xs text-left">
+                        <div className="flex justify-between gap-2">
+                          <span className="text-slate-400 font-medium shrink-0">Email :</span>
+                          <span className="text-slate-800 font-bold font-mono text-right truncate">
+                            {activeAgentId === 'admin' ? (currentUser?.email || '—') : agents.find(a => a.id === activeAgentId)?.email}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-slate-400 font-medium shrink-0">Téléphone :</span>
+                          <span className="text-slate-800 font-bold font-mono">
+                            {activeAgentId === 'admin' ? (currentUser?.phone || '—') : agents.find(a => a.id === activeAgentId)?.phone}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-slate-400 font-medium shrink-0">Code ID :</span>
+                          <span className="text-slate-800 font-bold font-mono">
+                            {activeAgentId === 'admin' ? (currentUser?.code || '—') : agents.find(a => a.id === activeAgentId)?.code}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span className="text-slate-400 font-medium shrink-0">Ville :</span>
+                          <span className="text-slate-800 font-bold">
+                            {activeAgentId === 'admin' ? (currentUser?.city || 'Bukavu') : (agents.find(a => a.id === activeAgentId)?.city || 'Bukavu')}, RDC
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Edit button — only for the currently logged-in user's own card */}
+                      {activeAgentId === 'admin' && (
+                        <button
+                          onClick={() => {
+                            setSelfEditName(currentUser?.name || '');
+                            setSelfEditPhone(currentUser?.phone || '');
+                            setSelfEditCity(currentUser?.city || 'Bukavu');
+                            setSelfEditMode(true);
+                          }}
+                          className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-orange-500 text-white text-xs font-bold uppercase tracking-wider py-2.5 px-4 rounded-none transition-colors"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          Modifier mon profil
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    /* Self-edit form */
+                    <form onSubmit={handleSaveSelfProfile} className="w-full space-y-3 text-left">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-orange-500 text-center border-b border-slate-100 pb-2">
+                        Modifier mes informations
+                      </p>
+
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Nom complet</label>
+                        <input
+                          type="text"
+                          value={selfEditName}
+                          onChange={e => setSelfEditName(e.target.value)}
+                          required
+                          placeholder="Votre nom complet"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-none px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Téléphone</label>
+                        <input
+                          type="tel"
+                          value={selfEditPhone}
+                          onChange={e => setSelfEditPhone(e.target.value)}
+                          placeholder="+243..."
+                          className="w-full bg-slate-50 border border-slate-200 rounded-none px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Ville</label>
+                        <select
+                          value={selfEditCity}
+                          onChange={e => setSelfEditCity(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-none px-3 py-2 text-xs font-bold text-slate-800 focus:outline-none focus:border-orange-400 focus:ring-1 focus:ring-orange-400"
+                        >
+                          {['Bukavu', 'Goma', 'Kinshasa', 'Beni', 'Butembo'].map(c => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          type="submit"
+                          disabled={isSavingSelfProfile}
+                          className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider py-2.5 rounded-none transition-colors"
+                        >
+                          {isSavingSelfProfile ? 'Sauvegarde…' : 'Enregistrer'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelfEditMode(false)}
+                          className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider py-2.5 rounded-none transition-colors"
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    </form>
+                  )}
                 </div>
+
 
                 {/* Profile Stats & Subordinates/Agents creation Right */}
                 <div className="lg:col-span-2 space-y-6">
@@ -2636,13 +3301,13 @@ export default function App() {
                       <div className="border-b border-slate-100 pb-2">
                         <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider font-display flex items-center">
                           <UserPlus className="w-4 h-4 mr-1.5 text-orange-500" />
-                          <span>Créer un Compte Subordonné (Admin Adjoint ou Agent)</span>
+                          <span>Créer un Compte Subordonné (Admin, Agent ou Opérateur)</span>
                         </h4>
                         <p className="text-[10px] text-slate-400 mt-0.5">Enregistrer un nouvel utilisateur habilité à utiliser l'application Ali Mobile.</p>
                       </div>
 
                       <form onSubmit={handleCreateSubordinate} className="space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                           <div>
                             <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Rôle de l'utilisateur</label>
                             <select
@@ -2651,8 +3316,21 @@ export default function App() {
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 font-bold cursor-pointer"
                             >
                               <option value="agent">Agent de Vente Agréé</option>
+                              <option value="operator">Opérateur Utilités</option>
                               <option value="admin">Administrateur Subordonné</option>
                             </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">Ville d'affectation</label>
+                            <input
+                              type="text"
+                              required
+                              value={newUserCity}
+                              onChange={(e) => setNewUserCity(e.target.value)}
+                              placeholder="Ex: Bukavu, Bukavu, Kinshasa..."
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
+                            />
                           </div>
 
                           <div>
@@ -2743,6 +3421,21 @@ export default function App() {
 
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Utility Transactions Tab (Airtel & Vodacom) */}
+          {activeTab === 'transactions' && (
+            <div className="no-print max-w-7xl mx-auto w-full">
+              <TransactionsTab
+                transactions={transactions}
+                agents={agents}
+                currentUser={currentUser}
+                canCreate={currentUser?.role === 'admin' || currentUser?.role === 'operator'}
+                onAddTransaction={handleAddTransaction}
+                onRefresh={refreshData}
+                showToast={showToast}
+              />
             </div>
           )}
 
@@ -2860,9 +3553,11 @@ export default function App() {
                 const client = clients.find(c => c.id === viewingContractDoc.clientId);
                 const phone = smartphones.find(p => p.id === viewingContractDoc.smartphoneId);
 
+                const contractAgent = agents.find(a => a.id === viewingContractDoc.agentId);
                 const agentName = viewingContractDoc.agentId === currentUser?.id
                   ? (currentUser?.name || 'Administrateur')
-                  : (agents.find(a => a.id === viewingContractDoc.agentId)?.name || currentUser?.name || 'Agent Ali Mobile');
+                  : (contractAgent?.name || currentUser?.name || 'Agent Ali Mobile');
+                const agentCity = contractAgent?.city || (viewingContractDoc.agentId === currentUser?.id ? currentUser?.city : undefined) || 'Bukavu';
 
                 if (!client || !phone) return null;
 
@@ -2905,11 +3600,593 @@ export default function App() {
                         client={client}
                         smartphone={phone}
                         agentName={agentName}
+                        agentCity={agentCity}
                       />
                     </div>
                   </div>
                 );
               })()
+            )}
+
+            {/* Modal: Create User */}
+            {showCreateUserModal && (
+              <div className="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white border border-slate-200 rounded-none w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+                >
+                  <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center">
+                    <div className="flex items-center space-x-2">
+                      <UserPlus className="w-5 h-5 text-orange-500" />
+                      <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider font-display">
+                        Créer un Nouvel Utilisateur
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => setShowCreateUserModal(false)}
+                      className="text-slate-400 hover:text-slate-600 p-1.5 rounded-none hover:bg-slate-100 transition cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleCreateSubordinate} className="p-6 space-y-4 overflow-y-auto">
+                    {/* Role selection */}
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1.5">
+                        Rôle de l'utilisateur
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { id: 'agent', label: 'Agent de Vente', desc: 'Crée contrats & encaisse' },
+                          { id: 'operator', label: 'Opérateur Utilités', desc: 'Gère utilités Airtel/Voda' },
+                          { id: 'admin', label: 'Admin Adjoint', desc: 'Gestion complète' },
+                        ].map((r) => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => setNewUserRole(r.id as any)}
+                            className={`p-3 rounded-none border text-left transition cursor-pointer ${
+                              newUserRole === r.id
+                                ? 'border-orange-500 bg-orange-50/60 ring-1 ring-orange-500'
+                                : 'border-slate-200 hover:bg-slate-50 bg-white'
+                            }`}
+                          >
+                            <span className="block text-xs font-bold text-slate-900">{r.label}</span>
+                            <span className="block text-[10px] text-slate-400 mt-0.5 leading-tight">{r.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Code d'identification unique & Ville */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500">
+                            Code ID Unique
+                          </label>
+                          <span className="text-[9px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded-none border border-emerald-200">
+                            Généré automatiquement
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          value={newUserCode}
+                          onChange={(e) => setNewUserCode(e.target.value)}
+                          placeholder="Ex: AG-243-04"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">Code interne attribué à l'employé.</p>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                          Ville d'affectation
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newUserCity}
+                          onChange={(e) => setNewUserCity(e.target.value)}
+                          placeholder="Ex: Goma, Bukavu, Kinshasa..."
+                          className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
+                        />
+                        <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                          {['Goma', 'Bukavu', 'Kinshasa', 'Beni', 'Butembo'].map(city => (
+                            <button
+                              key={city}
+                              type="button"
+                              onClick={() => setNewUserCity(city)}
+                              className={`text-[9px] font-bold px-2 py-0.5 rounded-none border cursor-pointer transition ${
+                                newUserCity === city ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-slate-50 text-slate-500 border-slate-200'
+                              }`}
+                            >
+                              {city}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Nom & Email */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                          Nom Complet
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newUserName}
+                          onChange={(e) => setNewUserName(e.target.value)}
+                          placeholder="Ex: Patrick Kasereka"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                          Adresse Email (Connexion)
+                        </label>
+                        <input
+                          type="email"
+                          required
+                          value={newUserEmail}
+                          onChange={(e) => setNewUserEmail(e.target.value)}
+                          placeholder="Ex: p.kasereka@alimobile.com"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Téléphone */}
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                        Numéro de Téléphone (WhatsApp / SMS)
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newUserPhone}
+                        onChange={(e) => setNewUserPhone(e.target.value)}
+                        placeholder="Ex: +243 970 000 000"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
+                      />
+                    </div>
+
+                    {/* Password Options */}
+                    <div className="bg-slate-50 p-4 rounded-none border border-slate-200 space-y-3">
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-700 block">
+                        Configuration du mot de passe
+                      </label>
+                      <div className="space-y-2">
+                        <label className="flex items-start space-x-2.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="passOpt"
+                            checked={createPasswordOption === 'invite'}
+                            onChange={() => setCreatePasswordOption('invite')}
+                            className="mt-0.5 text-orange-500 focus:ring-orange-500"
+                          />
+                          <div>
+                            <span className="text-xs font-bold text-slate-800 block">
+                              Envoyer une invitation par email & générer le lien de configuration (Recommandé)
+                            </span>
+                            <span className="text-[10px] text-slate-500 block">
+                              L'employé recevra un email ou vous pourrez lui transmettre le lien direct pour renseigner son propre mot de passe.
+                            </span>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start space-x-2.5 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="passOpt"
+                            checked={createPasswordOption === 'manual'}
+                            onChange={() => setCreatePasswordOption('manual')}
+                            className="mt-0.5 text-orange-500 focus:ring-orange-500"
+                          />
+                          <div>
+                            <span className="text-xs font-bold text-slate-800 block">
+                              Définir manuellement un mot de passe temporaire
+                            </span>
+                            <span className="text-[10px] text-slate-500 block">
+                              Vous définissez le mot de passe initial dès maintenant.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+
+                      {createPasswordOption === 'manual' && (
+                        <div className="pt-2 animate-fadeIn">
+                          <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                            Mot de passe initial (min 6 caractères)
+                          </label>
+                          <input
+                            type="password"
+                            required={createPasswordOption === 'manual'}
+                            value={newUserPassword}
+                            onChange={(e) => setNewUserPassword(e.target.value)}
+                            placeholder="Entrez un mot de passe temporaire..."
+                            className="w-full bg-white border border-slate-200 rounded-none text-xs px-3 py-2 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer actions */}
+                    <div className="pt-2 flex justify-end space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateUserModal(false)}
+                        className="px-4 py-2 rounded-none text-xs font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isProcessingUserAction}
+                        className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 px-6 rounded-none text-xs uppercase tracking-wider transition flex items-center space-x-2 cursor-pointer shadow-none disabled:opacity-50"
+                      >
+                        {isProcessingUserAction ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Création...</span>
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="w-3.5 h-3.5" />
+                            <span>Créer l'utilisateur</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              </div>
+            )}
+
+            {/* Modal: Created User Direct Link */}
+            {createdUserDirectLink && (
+              <div className="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white border border-slate-200 rounded-none w-full max-w-lg overflow-hidden shadow-2xl p-6 space-y-4"
+                >
+                  <div className="flex items-center space-x-3 text-emerald-600">
+                    <div className="w-10 h-10 bg-emerald-50 rounded-none border border-emerald-200 flex items-center justify-center">
+                      <Check className="w-6 h-6 text-emerald-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-900 uppercase font-display tracking-tight">
+                        Compte créé avec succès !
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        L'utilisateur <span className="font-bold text-slate-800">{createdUserDirectLink.name}</span> ({createdUserDirectLink.email}) est enregistré.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-none border border-slate-200 space-y-3 text-xs">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                      Lien direct pour renseigner le mot de passe
+                    </span>
+                    <p className="text-slate-600 leading-relaxed text-[11px]">
+                      Vous pouvez diriger directement l'utilisateur sur cette page pour qu'il renseigne son mot de passe ou lui transmettre le lien par WhatsApp/Email :
+                    </p>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={createdUserDirectLink.link}
+                        className="flex-grow bg-white border border-slate-200 rounded-none px-3 py-2 text-xs font-mono text-slate-700 select-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(createdUserDirectLink.link);
+                          setCopiedLink(true);
+                          setTimeout(() => setCopiedLink(false), 2000);
+                        }}
+                        className="bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 px-3 py-2 rounded-none font-bold text-xs uppercase tracking-wider flex items-center space-x-1 transition cursor-pointer"
+                      >
+                        {copiedLink ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Copié !</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copier</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {createdUserDirectLink.tempPass && (
+                      <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-none text-amber-800 font-mono text-xs">
+                        Mot de passe temporaire défini : <span className="font-bold">{createdUserDirectLink.tempPass}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2">
+                    <a
+                      href={createdUserDirectLink.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-orange-600 hover:text-orange-700 font-bold flex items-center space-x-1 cursor-pointer uppercase tracking-wider"
+                    >
+                      <span>Ouvrir la page de configuration</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => setCreatedUserDirectLink(null)}
+                      className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 px-5 rounded-none text-xs uppercase tracking-wider transition cursor-pointer"
+                    >
+                      Terminé
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+
+            {/* Modal: Reset Password */}
+            {resetPasswordAgent && (
+              <div className="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white border border-slate-200 rounded-none w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-5"
+                >
+                  <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+                    <div className="flex items-center space-x-2">
+                      <Key className="w-5 h-5 text-amber-500" />
+                      <h3 className="text-sm font-black text-slate-900 uppercase font-display tracking-tight">
+                        Mot de Passe : {resetPasswordAgent.name}
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setResetPasswordAgent(null);
+                        setManualPasswordInput('');
+                      }}
+                      className="text-slate-400 hover:text-slate-600 p-1.5 rounded-none hover:bg-slate-100 transition cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4 text-xs">
+                    {/* Option 1: Trigger Reset Email */}
+                    <div className="p-4 bg-slate-50 rounded-none border border-slate-200 space-y-2">
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block">
+                        Option 1 : Email de Réinitialisation
+                      </span>
+                      <p className="text-slate-600 text-[11px]">
+                        Déclencher l'envoi d'un email contenant un lien sécurisé permettant à l'employé de réinitialiser son mot de passe.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={isProcessingUserAction}
+                        onClick={() => handleSendResetPasswordEmail(resetPasswordAgent)}
+                        className="w-full bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 py-2.5 px-3 rounded-none font-bold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Envoyer l'email à {resetPasswordAgent.email}</span>
+                      </button>
+                    </div>
+
+                    {/* Option 2: Direct set password */}
+                    <form onSubmit={handleDirectSetPassword} className="p-4 bg-slate-50 rounded-none border border-slate-200 space-y-3">
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block">
+                        Option 2 : Définir un nouveau mot de passe directement
+                      </span>
+                      <p className="text-slate-600 text-[11px]">
+                        Attribuez immédiatement un nouveau mot de passe pour cet employé.
+                      </p>
+                      <input
+                        type="password"
+                        value={manualPasswordInput}
+                        onChange={(e) => setManualPasswordInput(e.target.value)}
+                        placeholder="Nouveau mot de passe (min 6 caractères)..."
+                        className="w-full bg-white border border-slate-200 rounded-none px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-orange-500"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isProcessingUserAction || manualPasswordInput.length < 6}
+                        className="w-full bg-slate-900 hover:bg-slate-800 text-white py-2.5 px-3 rounded-none font-bold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 transition cursor-pointer disabled:opacity-50"
+                      >
+                        <Key className="w-3.5 h-3.5" />
+                        <span>Enregistrer le nouveau mot de passe</span>
+                      </button>
+                    </form>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResetPasswordAgent(null);
+                        setManualPasswordInput('');
+                      }}
+                      className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 hover:bg-slate-100 rounded-none transition cursor-pointer"
+                    >
+                      Fermer
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+
+            {/* Modal: Edit User */}
+            {editingAgent && (
+              <div className="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white border border-slate-200 rounded-none w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4"
+                >
+                  <div className="flex justify-between items-center border-b border-slate-200 pb-3">
+                    <div className="flex items-center space-x-2">
+                      <Edit3 className="w-5 h-5 text-orange-500" />
+                      <h3 className="text-sm font-black text-slate-900 uppercase font-display tracking-tight">
+                        Modifier l'Utilisateur
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => setEditingAgent(null)}
+                      className="text-slate-400 hover:text-slate-600 p-1.5 rounded-none hover:bg-slate-100 transition cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveEditAgent} className="space-y-4">
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                        Nom Complet
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editAgentName}
+                        onChange={(e) => setEditAgentName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                        Numéro de Téléphone
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editAgentPhone}
+                        onChange={(e) => setEditAgentPhone(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-mono font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                        Ville d'affectation
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editAgentCity}
+                        onChange={(e) => setEditAgentCity(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 text-slate-800 font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1">
+                        Rôle Attribué
+                      </label>
+                      <select
+                        value={editAgentRole}
+                        disabled={editingAgent.id === currentUser?.id}
+                        onChange={(e) => setEditAgentRole(e.target.value as any)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-none text-xs px-3 py-2.5 focus:outline-none focus:border-orange-500 font-bold cursor-pointer disabled:opacity-50"
+                      >
+                        <option value="agent">Agent de Vente</option>
+                        <option value="operator">Opérateur Utilités</option>
+                        <option value="admin">Administrateur</option>
+                      </select>
+                      {editingAgent.id === currentUser?.id && (
+                        <p className="text-[10px] text-slate-400 mt-1">Vous ne pouvez pas révoquer votre propre rôle.</p>
+                      )}
+                    </div>
+
+                    <div className="pt-2 flex justify-end space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingAgent(null)}
+                        className="px-4 py-2 rounded-none text-xs font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isProcessingUserAction}
+                        className="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 px-6 rounded-none text-xs uppercase tracking-wider transition cursor-pointer shadow-none disabled:opacity-50"
+                      >
+                        Enregistrer
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              </div>
+            )}
+
+            {/* Modal: Delete Agent Confirm */}
+            {deleteAgentConfirm && (
+              <div className="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-white border border-slate-200 rounded-none w-full max-w-md overflow-hidden shadow-2xl p-6 space-y-4"
+                >
+                  <div className="flex items-center space-x-3 text-red-600">
+                    <div className="w-10 h-10 bg-red-50 rounded-none border border-red-200 flex items-center justify-center shrink-0">
+                      <Trash2 className="w-5 h-5 text-red-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-900 uppercase font-display tracking-tight">
+                        Supprimer l'Utilisateur
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Êtes-vous certain de vouloir supprimer le compte de <span className="font-bold text-slate-800">{deleteAgentConfirm.name}</span> ({deleteAgentConfirm.code}) ?
+                      </p>
+                    </div>
+                  </div>
+
+                  {contracts.some(c => c.agentId === deleteAgentConfirm.id) && (
+                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-none text-xs text-amber-800 space-y-1">
+                      <div className="flex items-center space-x-1.5 font-bold">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Attention aux contrats liés</span>
+                      </div>
+                      <p className="text-[11px]">
+                        Cet agent est associé à des contrats dans l'application. Si certains sont encore actifs, la suppression sera bloquée pour préserver l'intégrité des données.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end space-x-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setDeleteAgentConfirm(null)}
+                      className="px-4 py-2 rounded-none text-xs font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isProcessingUserAction}
+                      onClick={handleDeleteAgent}
+                      className="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-6 rounded-none text-xs uppercase tracking-wider transition cursor-pointer shadow-none disabled:opacity-50"
+                    >
+                      {isProcessingUserAction ? 'Suppression...' : 'Supprimer Définitivement'}
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
             )}
           </AnimatePresence>
 
@@ -2920,8 +4197,12 @@ export default function App() {
           {[
             { id: 'dashboard', label: 'Bord', icon: TrendingUp },
             { id: 'contracts', label: 'Contrats', icon: Users },
-            { id: 'new_contract', label: 'Nouveau', icon: PlusCircle },
-            { id: 'new_payment', label: 'Paiement', icon: Coins },
+            ...(currentUser?.role === 'operator' ? [
+              { id: 'transactions', label: 'Trans.', icon: ArrowLeftRight },
+            ] : [
+              { id: 'new_contract', label: 'Nouveau', icon: PlusCircle },
+              { id: 'new_payment', label: 'Paiement', icon: Coins },
+            ]),
             { id: 'knox', label: 'Knox', icon: ShieldAlert, badge: filteredDelays.length > 0 ? filteredDelays.length : undefined },
           ].map((item) => {
             const Icon = item.icon;

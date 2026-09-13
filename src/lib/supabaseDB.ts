@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Agent, Smartphone, Client, Contract, Payment, DelayRecord, PaymentPlanType } from '../data/db';
+import { Agent, Smartphone, Client, Contract, Payment, DelayRecord, PaymentPlanType, UtilityTransaction } from '../data/db';
 
 // DB mapping helpers (snake_case database to camelCase React models)
 export function mapAgent(db: any): Agent {
@@ -10,6 +10,7 @@ export function mapAgent(db: any): Agent {
     phone: db.phone,
     code: db.code,
     role: db.role,
+    city: db.city || 'Bukavu',
   };
 }
 
@@ -88,6 +89,22 @@ export function mapDelayRecord(db: any): DelayRecord {
   };
 }
 
+export function mapTransaction(db: any): UtilityTransaction {
+  return {
+    id: db.id,
+    clientName: db.client_name,
+    transactionType: db.transaction_type,
+    phoneNumber: db.phone_number,
+    amount: Number(db.amount),
+    operator: db.operator,
+    operatorTransactionNumber: db.operator_transaction_number,
+    referenceNumber: db.reference_number,
+    reason: db.reason,
+    operatorId: db.operator_id,
+    createdAt: db.created_at,
+  };
+}
+
 export const supabaseDB = {
   // GETTERS
   async getAgents(): Promise<Agent[]> {
@@ -124,6 +141,12 @@ export const supabaseDB = {
     const { data, error } = await supabase.from('delay_records').select('*').order('due_date', { ascending: false });
     if (error) throw error;
     return (data || []).map(mapDelayRecord);
+  },
+
+  async getTransactions(): Promise<UtilityTransaction[]> {
+    const { data, error } = await supabase.from('transactions').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(mapTransaction);
   },
 
   // INSERTIONS / MUTATIONS
@@ -319,20 +342,88 @@ export const supabaseDB = {
     }
   },
 
-  // ADMIN CREATE AGENT SUBORDINATE
-  async createAgent(agent: Omit<Agent, 'id'>, password: string): Promise<string> {
+  // ADMIN CREATE AGENT SUBORDINATE (Agent or Operator)
+  async createAgent(agent: Omit<Agent, 'id'>, password?: string): Promise<string> {
+    // Generate secure temp password if not provided
+    const effectivePassword = password || `Ali${Math.random().toString(36).slice(-8)}!${Math.floor(100 + Math.random() * 900)}`;
+
     // Call the postgres function RPC 'create_agent_user'
     const { data, error } = await supabase.rpc('create_agent_user', {
       email: agent.email,
-      password: password,
+      password: effectivePassword,
       name: agent.name,
       phone: agent.phone,
       code: agent.code,
-      role: 'agent', // Always created as agent by admins
+      role: agent.role || 'agent',
+      city: agent.city || 'Bukavu',
     });
 
     if (error) throw error;
     return data as string; // returns created user UUID
+  },
+
+  // ADMIN UPDATE AGENT (ROLE, CITY, INFO)
+  async updateAgent(
+    id: string,
+    updates: Partial<Pick<Agent, 'role' | 'city' | 'name' | 'phone'>>
+  ): Promise<void> {
+    const dbUpdates: any = {};
+    if (updates.role !== undefined) dbUpdates.role = updates.role;
+    if (updates.city !== undefined) dbUpdates.city = updates.city;
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
+
+    const { error } = await supabase.from('agents').update(dbUpdates).eq('id', id);
+    if (error) throw error;
+  },
+
+  // ADMIN DELETE AGENT (CASCADE WITH AUTH)
+  async deleteAgent(id: string): Promise<void> {
+    const { error: rpcError } = await supabase.rpc('delete_agent_user', { target_user_id: id });
+    if (rpcError) {
+      console.warn("RPC delete_agent_user fallback to direct table delete:", rpcError);
+      const { error } = await supabase.from('agents').delete().eq('id', id);
+      if (error) throw error;
+    }
+  },
+
+  // TRIGGER PASSWORD RESET EMAIL
+  async sendPasswordResetEmail(email: string): Promise<void> {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}`,
+    });
+    if (error) throw error;
+  },
+
+  // ADMIN DIRECT SET PASSWORD FOR EMPLOYEE
+  async setAgentPassword(id: string, newPassword: string): Promise<void> {
+    const { error } = await supabase.rpc('set_agent_password', {
+      target_user_id: id,
+      new_password: newPassword,
+    });
+    if (error) throw error;
+  },
+
+  // UTILITY TRANSACTIONS (AIRTEL / VODACOM)
+  async addTransaction(tx: Omit<UtilityTransaction, 'id' | 'createdAt'>): Promise<UtilityTransaction> {
+    const { data, error } = await supabase
+      .from('transactions')
+      .insert({
+        client_name: tx.clientName,
+        transaction_type: tx.transactionType,
+        phone_number: tx.phoneNumber,
+        amount: tx.amount,
+        operator: tx.operator,
+        operator_transaction_number: tx.operatorTransactionNumber,
+        reference_number: tx.referenceNumber,
+        reason: tx.reason,
+        operator_id: tx.operatorId,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return mapTransaction(data);
   },
 
   // SIMULATOR TRIGGER FOR KNOX BLOCK UNLOCKING
