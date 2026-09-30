@@ -86,7 +86,8 @@ export interface UtilityTransaction {
   transactionType: 'dépôt' | 'retrait';
   phoneNumber: string;
   amount: number;
-  operator: 'Airtel' | 'Vodacom';
+  currency: 'USD' | 'CDF';
+  operator: 'Airtel' | 'Vodacom' | 'Voda-e';
   operatorTransactionNumber: string;
   referenceNumber: string;
   reason: string;
