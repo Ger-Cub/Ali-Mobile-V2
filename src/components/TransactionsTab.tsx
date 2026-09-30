@@ -44,15 +44,17 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'dépôt' | 'retrait'>('all');
-  const [filterOperator, setFilterOperator] = useState<'all' | 'Airtel' | 'Vodacom'>('all');
+  const [filterOperator, setFilterOperator] = useState<'all' | 'Airtel' | 'Vodacom' | 'Voda-e'>('all');
+  const [filterCurrency, setFilterCurrency] = useState<'all' | 'USD' | 'CDF'>('all');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form State
   const [clientName, setClientName] = useState('');
-  const [transactionType, setTransactionType] = useState<'dépôt' | 'retrait'>('dépôt');
+  const [transactionType, setTransactionType] = useState<'retrait' | 'dépôt'>('retrait');
+  const [currency, setCurrency] = useState<'USD' | 'CDF'>('USD');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [amount, setAmount] = useState('');
-  const [operator, setOperator] = useState<'Airtel' | 'Vodacom'>('Airtel');
+  const [operator, setOperator] = useState<'Airtel' | 'Vodacom' | 'Voda-e'>('Airtel');
   const [operatorTxNum, setOperatorTxNum] = useState('');
   const [referenceNum, setReferenceNum] = useState('');
   const [reason, setReason] = useState('');
@@ -62,7 +64,8 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     const randomRef = `UTX-${Date.now().toString().slice(-6)}-${Math.floor(1000 + Math.random() * 9000)}`;
     setReferenceNum(randomRef);
     setClientName('');
-    setTransactionType('dépôt');
+    setTransactionType('retrait');
+    setCurrency('USD');
     setPhoneNumber('');
     setAmount('');
     setOperator('Airtel');
@@ -83,25 +86,39 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
       const matchType = filterType === 'all' || tx.transactionType === filterType;
       const matchOp = filterOperator === 'all' || tx.operator === filterOperator;
+      const matchCurrency = filterCurrency === 'all' || (tx.currency || 'USD') === filterCurrency;
 
-      return matchSearch && matchType && matchOp;
+      return matchSearch && matchType && matchOp && matchCurrency;
     });
-  }, [transactions, searchTerm, filterType, filterOperator]);
+  }, [transactions, searchTerm, filterType, filterOperator, filterCurrency]);
 
-  // KPIs
-  const totalDepots = useMemo(() => {
+  // KPIs split by currency (USD & CDF)
+  const totalDepotsUSD = useMemo(() => {
     return transactions
-      .filter(t => t.transactionType === 'dépôt')
+      .filter(t => t.transactionType === 'dépôt' && (t.currency === 'USD' || !t.currency))
       .reduce((sum, t) => sum + t.amount, 0);
   }, [transactions]);
 
-  const totalRetraits = useMemo(() => {
+  const totalDepotsCDF = useMemo(() => {
     return transactions
-      .filter(t => t.transactionType === 'retrait')
+      .filter(t => t.transactionType === 'dépôt' && t.currency === 'CDF')
       .reduce((sum, t) => sum + t.amount, 0);
   }, [transactions]);
 
-  const totalVolume = totalDepots + totalRetraits;
+  const totalRetraitsUSD = useMemo(() => {
+    return transactions
+      .filter(t => t.transactionType === 'retrait' && (t.currency === 'USD' || !t.currency))
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [transactions]);
+
+  const totalRetraitsCDF = useMemo(() => {
+    return transactions
+      .filter(t => t.transactionType === 'retrait' && t.currency === 'CDF')
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [transactions]);
+
+  const totalVolumeUSD = totalDepotsUSD + totalRetraitsUSD;
+  const totalVolumeCDF = totalDepotsCDF + totalRetraitsCDF;
 
   // Handle Export to Excel
   const handleExportExcel = () => {
@@ -119,7 +136,8 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
           "Nom du Client": tx.clientName,
           "Téléphone": tx.phoneNumber,
           "Type": tx.transactionType === 'dépôt' ? 'DÉPÔT' : 'RETRAIT',
-          "Montant ($ USD)": tx.amount,
+          "Devise": tx.currency || 'USD',
+          "Montant": tx.amount,
           "Opérateur Télécom": tx.operator,
           "N° Transaction Opérateur": tx.operatorTransactionNumber,
           "N° Référence Interne": tx.referenceNumber,
@@ -136,6 +154,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
         { wch: 25 }, // Client
         { wch: 16 }, // Tel
         { wch: 12 }, // Type
+        { wch: 10 }, // Devise
         { wch: 16 }, // Montant
         { wch: 18 }, // Opérateur
         { wch: 25 }, // N° Trans
@@ -176,6 +195,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
       await onAddTransaction({
         clientName,
         transactionType,
+        currency,
         phoneNumber,
         amount: numAmount,
         operator,
@@ -185,7 +205,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
         operatorId: currentUser?.id || 'admin',
       });
 
-      showToast(`Transaction ${transactionType.toUpperCase()} de ${numAmount} $ enregistrée avec succès !`);
+      showToast(`Transaction ${transactionType.toUpperCase()} de ${numAmount.toLocaleString('fr-FR')} ${currency} enregistrée avec succès !`);
       setShowModal(false);
     } catch (err: any) {
       console.error(err);
@@ -246,7 +266,12 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
             </div>
           </div>
           <div className="mt-2">
-            <span className="text-3xl font-black text-slate-900 font-mono">{totalVolume.toLocaleString('fr-FR')} $</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-slate-900 font-mono">{totalVolumeUSD.toLocaleString('fr-FR')} $</span>
+              {totalVolumeCDF > 0 && (
+                <span className="text-xs font-bold text-slate-500 font-mono">/ {totalVolumeCDF.toLocaleString('fr-FR')} FC</span>
+              )}
+            </div>
             <p className="text-[11px] text-slate-400 mt-1 font-mono">{transactions.length} transactions au total</p>
           </div>
         </div>
@@ -260,7 +285,12 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
             </div>
           </div>
           <div className="mt-2">
-            <span className="text-3xl font-black text-emerald-600 font-mono">{totalDepots.toLocaleString('fr-FR')} $</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-emerald-600 font-mono">{totalDepotsUSD.toLocaleString('fr-FR')} $</span>
+              {totalDepotsCDF > 0 && (
+                <span className="text-xs font-bold text-emerald-700 font-mono">/ {totalDepotsCDF.toLocaleString('fr-FR')} FC</span>
+              )}
+            </div>
             <p className="text-[11px] text-slate-400 mt-1 font-mono">
               {transactions.filter(t => t.transactionType === 'dépôt').length} opérations entrantes
             </p>
@@ -276,7 +306,12 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
             </div>
           </div>
           <div className="mt-2">
-            <span className="text-3xl font-black text-rose-600 font-mono">{totalRetraits.toLocaleString('fr-FR')} $</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-rose-600 font-mono">{totalRetraitsUSD.toLocaleString('fr-FR')} $</span>
+              {totalRetraitsCDF > 0 && (
+                <span className="text-xs font-bold text-rose-700 font-mono">/ {totalRetraitsCDF.toLocaleString('fr-FR')} FC</span>
+              )}
+            </div>
             <p className="text-[11px] text-slate-400 mt-1 font-mono">
               {transactions.filter(t => t.transactionType === 'retrait').length} opérations sortantes
             </p>
@@ -291,16 +326,18 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
               <Layers className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-center justify-between text-xs font-mono">
-            <div className="flex items-center gap-1.5 bg-red-50 border border-red-100 px-2 py-1 rounded-none">
-              <span className="w-2 h-2 bg-red-500 rounded-none inline-block" />
-              <span className="text-red-700 font-bold">Airtel:</span>
+          <div className="mt-3 grid grid-cols-3 gap-1.5 text-[11px] font-mono text-center">
+            <div className="bg-red-50 border border-red-100 px-1 py-1 rounded-none">
+              <span className="text-red-700 font-bold block text-[9px] uppercase">Airtel</span>
               <span className="font-black text-red-900">{transactions.filter(t => t.operator === 'Airtel').length}</span>
             </div>
-            <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-100 px-2 py-1 rounded-none">
-              <span className="w-2 h-2 bg-rose-600 rounded-none inline-block" />
-              <span className="text-rose-700 font-bold">Vodacom:</span>
+            <div className="bg-rose-50 border border-rose-100 px-1 py-1 rounded-none">
+              <span className="text-rose-700 font-bold block text-[9px] uppercase">Vodacom</span>
               <span className="font-black text-rose-900">{transactions.filter(t => t.operator === 'Vodacom').length}</span>
+            </div>
+            <div className="bg-blue-50 border border-blue-100 px-1 py-1 rounded-none">
+              <span className="text-blue-700 font-bold block text-[9px] uppercase">Voda-e</span>
+              <span className="font-black text-blue-900">{transactions.filter(t => t.operator === 'Voda-e').length}</span>
             </div>
           </div>
         </div>
@@ -322,6 +359,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Filter Type */}
           <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 p-1 rounded-none">
             <span className="text-[10px] text-slate-500 uppercase px-2 font-bold font-mono">Type :</span>
             {(['all', 'dépôt', 'retrait'] as const).map(type => (
@@ -339,13 +377,32 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
             ))}
           </div>
 
+          {/* Filter Devise */}
+          <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 p-1 rounded-none">
+            <span className="text-[10px] text-slate-500 uppercase px-2 font-bold font-mono">Devise :</span>
+            {(['all', 'USD', 'CDF'] as const).map(cur => (
+              <button
+                key={cur}
+                onClick={() => setFilterCurrency(cur)}
+                className={`px-3 py-1 text-xs font-bold uppercase transition rounded-none cursor-pointer ${
+                  filterCurrency === cur
+                    ? 'bg-orange-500 text-white shadow-none'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                {cur === 'all' ? 'Toutes' : cur}
+              </button>
+            ))}
+          </div>
+
+          {/* Filter Opérateur */}
           <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 p-1 rounded-none">
             <span className="text-[10px] text-slate-500 uppercase px-2 font-bold font-mono">Opérateur :</span>
-            {(['all', 'Airtel', 'Vodacom'] as const).map(op => (
+            {(['all', 'Airtel', 'Vodacom', 'Voda-e'] as const).map(op => (
               <button
                 key={op}
                 onClick={() => setFilterOperator(op)}
-                className={`px-3 py-1 text-xs font-bold uppercase transition rounded-none cursor-pointer ${
+                className={`px-2.5 py-1 text-xs font-bold uppercase transition rounded-none cursor-pointer ${
                   filterOperator === op
                     ? 'bg-orange-500 text-white shadow-none'
                     : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
@@ -367,6 +424,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                 <th className="py-3 px-4">Date / Réf</th>
                 <th className="py-3 px-4">Client</th>
                 <th className="py-3 px-4">Type</th>
+                <th className="py-3 px-4 text-center">Devise</th>
                 <th className="py-3 px-4 text-right">Montant</th>
                 <th className="py-3 px-4">Opérateur</th>
                 <th className="py-3 px-4">N° Trans. Opérateur</th>
@@ -377,11 +435,11 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
             <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
               {filteredTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400">
+                  <td colSpan={9} className="py-12 text-center text-slate-400">
                     <FileText className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                     <p className="font-bold text-slate-600">Aucune transaction trouvée</p>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      {searchTerm || filterType !== 'all' || filterOperator !== 'all'
+                      {searchTerm || filterType !== 'all' || filterOperator !== 'all' || filterCurrency !== 'all'
                         ? 'Essayez de modifier vos filtres'
                         : 'Enregistrez votre première transaction'}
                     </p>
@@ -391,6 +449,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                 filteredTransactions.map(tx => {
                   const agent = agents.find(a => a.id === tx.operatorId);
                   const isDeposit = tx.transactionType === 'dépôt';
+                  const txCurrency = tx.currency || 'USD';
                   return (
                     <tr key={tx.id} className="hover:bg-slate-50/80 transition">
                       <td className="py-3.5 px-4 font-mono">
@@ -427,20 +486,33 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                           {tx.transactionType}
                         </span>
                       </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <span
+                          className={`inline-block px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider rounded-none border ${
+                            txCurrency === 'USD'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                          }`}
+                        >
+                          {txCurrency}
+                        </span>
+                      </td>
                       <td className="py-3.5 px-4 text-right font-mono font-black text-sm">
                         <span className={isDeposit ? 'text-emerald-600' : 'text-rose-600'}>
-                          {isDeposit ? '+' : '-'}{tx.amount.toLocaleString('fr-FR')} $
+                          {isDeposit ? '+' : '-'}{tx.amount.toLocaleString('fr-FR')} {txCurrency === 'USD' ? '$' : 'FC'}
                         </span>
                       </td>
                       <td className="py-3.5 px-4">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-none ${
+                          className={`inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-none border ${
                             tx.operator === 'Airtel'
-                              ? 'bg-red-50 text-red-700 border border-red-200'
-                              : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              ? 'bg-red-50 text-red-700 border-red-200'
+                              : tx.operator === 'Vodacom'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-blue-50 text-blue-700 border-blue-200'
                           }`}
                         >
-                          {tx.operator}
+                          {tx.operator === 'Voda-e' ? 'Voda-e' : tx.operator}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 font-mono text-slate-700 font-semibold">
@@ -487,7 +559,7 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                       Enregistrer une Transaction
                     </h2>
                     <p className="text-[10px] text-slate-400 uppercase tracking-widest font-mono font-bold">
-                      Service d'Utilités Ali Mobile (Airtel & Vodacom)
+                      Service d'Utilités Ali Mobile (Airtel, Vodacom & Voda-e)
                     </p>
                   </div>
                 </div>
@@ -519,25 +591,12 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   />
                 </div>
 
-                {/* Type de transaction */}
+                {/* Type de transaction - Retrait et Dépôt permutés */}
                 <div>
                   <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1.5">
                     Type de Transaction *
                   </label>
                   <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setTransactionType('dépôt')}
-                      className={`py-3 px-4 border rounded-none text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer ${
-                        transactionType === 'dépôt'
-                          ? 'bg-emerald-50 border-emerald-400 text-emerald-700 ring-1 ring-emerald-400'
-                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-slate-300'
-                      }`}
-                    >
-                      <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
-                      <span>Dépôt d'argent</span>
-                    </button>
-
                     <button
                       type="button"
                       onClick={() => setTransactionType('retrait')}
@@ -550,19 +609,66 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                       <ArrowUpRight className="w-4 h-4 text-rose-600" />
                       <span>Retrait d'argent</span>
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTransactionType('dépôt')}
+                      className={`py-3 px-4 border rounded-none text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer ${
+                        transactionType === 'dépôt'
+                          ? 'bg-emerald-50 border-emerald-400 text-emerald-700 ring-1 ring-emerald-400'
+                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
+                      <span>Dépôt d'argent</span>
+                    </button>
                   </div>
                 </div>
 
-                {/* Opérateur Telecom */}
+                {/* Devise (USD / CDF) */}
                 <div>
                   <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1.5">
-                    Opérateur Télécom *
+                    Devise de la Transaction *
                   </label>
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
+                      onClick={() => setCurrency('USD')}
+                      className={`py-2.5 px-4 border rounded-none text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer ${
+                        currency === 'USD'
+                          ? 'bg-amber-50 border-amber-400 text-amber-700 ring-1 ring-amber-400'
+                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <span className="font-mono text-sm font-black">$</span>
+                      <span>USD ($ Dollar)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCurrency('CDF')}
+                      className={`py-2.5 px-4 border rounded-none text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer ${
+                        currency === 'CDF'
+                          ? 'bg-indigo-50 border-indigo-400 text-indigo-700 ring-1 ring-indigo-400'
+                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <span className="font-mono text-sm font-black">FC</span>
+                      <span>CDF (FC Franc)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Opérateur Telecom (Airtel, Vodacom, Voda-e) */}
+                <div>
+                  <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1.5">
+                    Opérateur Télécom / Service *
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <button
+                      type="button"
                       onClick={() => setOperator('Airtel')}
-                      className={`py-2.5 px-4 border rounded-none text-xs font-bold uppercase tracking-wider transition cursor-pointer ${
+                      className={`py-2.5 px-3 border rounded-none text-xs font-bold uppercase tracking-wider transition cursor-pointer text-center ${
                         operator === 'Airtel'
                           ? 'bg-red-50 border-red-400 text-red-700 ring-1 ring-red-400'
                           : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-slate-300'
@@ -574,13 +680,25 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                     <button
                       type="button"
                       onClick={() => setOperator('Vodacom')}
-                      className={`py-2.5 px-4 border rounded-none text-xs font-bold uppercase tracking-wider transition cursor-pointer ${
+                      className={`py-2.5 px-3 border rounded-none text-xs font-bold uppercase tracking-wider transition cursor-pointer text-center ${
                         operator === 'Vodacom'
                           ? 'bg-rose-50 border-rose-400 text-rose-700 ring-1 ring-rose-400'
                           : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-slate-300'
                       }`}
                     >
                       Vodacom M-Pesa
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setOperator('Voda-e')}
+                      className={`py-2.5 px-3 border rounded-none text-xs font-bold uppercase tracking-wider transition cursor-pointer text-center ${
+                        operator === 'Voda-e'
+                          ? 'bg-blue-50 border-blue-500 text-blue-700 ring-1 ring-blue-500'
+                          : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      Voda-e (Unités)
                     </button>
                   </div>
                 </div>
@@ -616,18 +734,18 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
                   </div>
                 </div>
 
-                {/* Montant ($) & Numéro Transaction Opérateur */}
+                {/* Montant & Numéro Transaction Opérateur */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] uppercase font-bold tracking-wider text-slate-500 block mb-1.5">
-                      Montant ($ USD) *
+                      Montant ({currency === 'USD' ? '$ USD' : 'FC Franc Congolais'}) *
                     </label>
                     <input
                       type="number"
-                      step="0.01"
-                      min="0.1"
+                      step={currency === 'USD' ? '0.01' : '100'}
+                      min={currency === 'USD' ? '0.1' : '100'}
                       required
-                      placeholder="0.00"
+                      placeholder={currency === 'USD' ? '0.00' : '0'}
                       value={amount}
                       onChange={e => setAmount(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-none text-slate-900 text-xs px-3.5 py-2.5 focus:outline-none focus:border-orange-500 font-mono font-black"
@@ -690,4 +808,3 @@ export const TransactionsTab: React.FC<TransactionsTabProps> = ({
     </div>
   );
 };
-

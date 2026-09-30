@@ -16,6 +16,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [showPassword, setShowPassword] = useState(false);
 
   // New password form state (for reset password flow)
+  const [resetEmail, setResetEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -24,16 +25,62 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Detect recovery mode from URL hash
-  useEffect(() => {
-    const hash = window.location.hash;
-    if (hash && (hash.includes('type=recovery') || hash.includes('access_token'))) {
-      setMode('reset_password');
+  // Helper to extract email and recovery info from URL (hash or query params)
+  const checkUrlForRecovery = async () => {
+    // 1. Check Query Params (e.g. Supabase PKCE flow ?code=... or ?email=...)
+    const searchParams = new URLSearchParams(window.location.search);
+    const code = searchParams.get('code');
+    const paramEmail = searchParams.get('email');
+    if (paramEmail) {
+      setResetEmail(decodeURIComponent(paramEmail));
     }
+
+    // If PKCE authorization code is present in query parameters, exchange it
+    if (code) {
+      setLoading(true);
+      try {
+        const { data, error: exchangeErr } = await supabase.auth.exchangeCodeForSession(code);
+        if (!exchangeErr && data?.session) {
+          setMode('reset_password');
+          if (data.session.user?.email) {
+            setResetEmail(data.session.user.email);
+          }
+        }
+      } catch (err) {
+        console.warn("PKCE exchange error:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // 2. Check Hash Fragment (e.g. #type=recovery&email=... or #access_token=...)
+    const hash = window.location.hash;
+    if (hash) {
+      const cleanHash = hash.replace(/^#/, '');
+      const hashParams = new URLSearchParams(cleanHash);
+      const hashType = hashParams.get('type');
+      const hashEmail = hashParams.get('email');
+
+      if (hashEmail) {
+        setResetEmail(decodeURIComponent(hashEmail));
+      }
+
+      if (hashType === 'recovery' || hash.includes('type=recovery') || hash.includes('access_token')) {
+        setMode('reset_password');
+      }
+    }
+  };
+
+  // Detect recovery mode on mount and listen to auth changes
+  useEffect(() => {
+    checkUrlForRecovery();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         setMode('reset_password');
+        if (session?.user?.email) {
+          setResetEmail(session.user.email);
+        }
       } else if (event === 'SIGNED_IN' && session && mode === 'login') {
         onLoginSuccess(session);
       }
@@ -108,7 +155,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     }
   };
 
-  // Set New Password
+  // Set New Password (handles both with-session and without-session recovery/direct link)
   const handleSetNewPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPassword || !confirmPassword) {
@@ -130,30 +177,80 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setError(null);
 
     try {
-      const { data, error: updateError } = await supabase.auth.updateUser({
+      let isSuccess = false;
+      const targetEmail = (resetEmail || email).trim();
+
+      // Step 1: Check if an active Supabase session exists
+      const { data: sessionData } = await supabase.auth.getSession();
+      const hasActiveSession = !!sessionData?.session;
+
+      if (hasActiveSession) {
+        // Active session exists: use standard updateUser
+        const { data, error: updateError } = await supabase.auth.updateUser({
+          password: newPassword,
+        });
+
+        if (!updateError && data.user) {
+          isSuccess = true;
+          setSuccessMessage("Votre mot de passe a été mis à jour avec succès ! Connexion en cours...");
+          setTimeout(() => {
+            window.history.replaceState(null, '', window.location.pathname);
+            if (sessionData?.session) {
+              onLoginSuccess(sessionData.session);
+            } else {
+              setMode('login');
+            }
+          }, 1200);
+          return;
+        }
+      }
+
+      // Step 2: Fallback when Auth session is missing (direct invite link / reset without session)
+      if (!targetEmail) {
+        setError("Veuillez préciser votre adresse email professionnelle ci-dessous pour valider votre mot de passe.");
+        setLoading(false);
+        return;
+      }
+
+      // Call secure Postgres RPC function to set password directly in auth.users
+      const { error: rpcError } = await supabase.rpc('set_user_password_by_email', {
+        target_email: targetEmail,
+        new_password: newPassword,
+      });
+
+      if (rpcError) {
+        throw rpcError;
+      }
+
+      // Immediately sign in with the new password
+      const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+        email: targetEmail,
         password: newPassword,
       });
 
-      if (updateError) {
-        throw updateError;
-      }
-
-      setSuccessMessage("Votre mot de passe a été mis à jour avec succès ! Redirection en cours...");
-      setTimeout(() => {
-        // Clear hash from URL
-        window.history.replaceState(null, '', window.location.pathname);
-        if (data.user) {
-          supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) onLoginSuccess(session);
-            else setMode('login');
-          });
-        } else {
+      if (!signInErr && signInData.session) {
+        setSuccessMessage("Mot de passe validé avec succès ! Connexion automatique...");
+        setTimeout(() => {
+          window.history.replaceState(null, '', window.location.pathname);
+          onLoginSuccess(signInData.session);
+        }, 1200);
+      } else {
+        setSuccessMessage("Mot de passe mis à jour avec succès ! Vous pouvez maintenant vous connecter.");
+        setTimeout(() => {
+          window.history.replaceState(null, '', window.location.pathname);
+          setEmail(targetEmail);
+          setPassword(newPassword);
           setMode('login');
-        }
-      }, 1500);
+        }, 1500);
+      }
     } catch (err: any) {
       console.error('Set password error:', err);
-      setError(err.message || "Erreur lors de la mise à jour du mot de passe.");
+      // Clean up common error messages
+      if (err.message?.includes('Auth session missing')) {
+        setError("Session manquante. Veuillez renseigner votre email professionnel ci-dessous pour enregistrer votre mot de passe.");
+      } else {
+        setError(err.message || "Erreur lors de la mise à jour du mot de passe.");
+      }
     } finally {
       setLoading(false);
     }
@@ -367,6 +464,25 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
             <div className="p-3.5 bg-orange-500/10 border border-orange-500/20 text-orange-300 text-xs flex items-center gap-2 font-medium">
               <ShieldCheck className="w-4 h-4 shrink-0 text-orange-400" />
               <span>Veuillez choisir un mot de passe sécurisé pour votre compte Ali Mobile.</span>
+            </div>
+
+            <div>
+              <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-2">
+                Adresse email professionnelle *
+              </label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500">
+                  <Mail className="w-4 h-4" />
+                </span>
+                <input
+                  type="email"
+                  required
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="nom@alimobile.com"
+                  className="w-full bg-[#0F172A] border border-[#334155] rounded-none text-sm pl-11 pr-4 py-3.5 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 text-white font-medium transition placeholder:text-slate-600 font-mono"
+                />
+              </div>
             </div>
 
             <div>

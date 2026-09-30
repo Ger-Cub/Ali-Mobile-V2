@@ -96,6 +96,7 @@ export function mapTransaction(db: any): UtilityTransaction {
     transactionType: db.transaction_type,
     phoneNumber: db.phone_number,
     amount: Number(db.amount),
+    currency: (db.currency === 'CDF' ? 'CDF' : 'USD') as 'USD' | 'CDF',
     operator: db.operator,
     operatorTransactionNumber: db.operator_transaction_number,
     referenceNumber: db.reference_number,
@@ -404,7 +405,16 @@ export const supabaseDB = {
     if (error) throw error;
   },
 
-  // UTILITY TRANSACTIONS (AIRTEL / VODACOM)
+  // SET USER PASSWORD BY EMAIL (RPC WITHOUT REQUIRING ACTIVE AUTH SESSION)
+  async setUserPasswordByEmail(email: string, newPassword: string): Promise<void> {
+    const { error } = await supabase.rpc('set_user_password_by_email', {
+      target_email: email,
+      new_password: newPassword,
+    });
+    if (error) throw error;
+  },
+
+  // UTILITY TRANSACTIONS (AIRTEL / VODACOM / VODA-E)
   async addTransaction(tx: Omit<UtilityTransaction, 'id' | 'createdAt'>): Promise<UtilityTransaction> {
     const { data, error } = await supabase
       .from('transactions')
@@ -413,6 +423,7 @@ export const supabaseDB = {
         transaction_type: tx.transactionType,
         phone_number: tx.phoneNumber,
         amount: tx.amount,
+        currency: tx.currency || 'USD',
         operator: tx.operator,
         operator_transaction_number: tx.operatorTransactionNumber,
         reference_number: tx.referenceNumber,
