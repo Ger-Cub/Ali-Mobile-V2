@@ -301,8 +301,13 @@ export default function App() {
     // Subscribe to public schema changes in realtime
     const dbChangesChannel = supabase
       .channel('schema-db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-        refreshData();
+      .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+        // Optimisation : si seule la table 'transactions' change en INSERT, pas besoin de recharger toute la base
+        if (payload.table === 'transactions' && payload.eventType === 'INSERT') {
+          supabaseDB.getTransactions().then(txList => setTransactions(txList || [])).catch(console.error);
+        } else {
+          refreshData();
+        }
       })
       .subscribe();
 
@@ -335,8 +340,8 @@ export default function App() {
   };
 
   const handleAddTransaction = async (txData: Omit<UtilityTransaction, 'id' | 'createdAt'>) => {
-    await supabaseDB.addTransaction(txData);
-    await refreshData();
+    const createdTx = await supabaseDB.addTransaction(txData);
+    setTransactions(prev => [createdTx, ...prev]);
   };
 
   // Export Contracts to Excel (.xlsx)
